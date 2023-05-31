@@ -5,18 +5,19 @@
 \____/_/ |_/\__,_/_/ /_/ /_/_/_/ /_/ /_/\__,_/\__/\___/____]]
 H = host:isHost()
 local Parts = {
-   root = models.RCcar,
-   base = models.RCcar.Base,
+   root = models.RCcar.root,
+   base = models.RCcar.root.Base,
    steer_wheels = {
-      {4,models.RCcar.FL},
-      {4,models.RCcar.FR},
+      {4,models.RCcar.root.Wheel.FL},
+      {4,models.RCcar.root.Wheel.FR},
    },
    engine_wheels = {
-      {5,models.RCcar.BL},
-      {5,models.RCcar.BR},
+      {5,models.RCcar.root.Wheel.BL},
+      {5,models.RCcar.root.Wheel.BR},
    }
 }
 
+models:setSecondaryTexture("SPECULAR",textures:newTexture("wie",1,1):setPixel(0,0,vectors.vec4(0,1,0,1)))
 local Input = {
    Start    = keybinds:newKeybind("Start RC Car","key.keyboard.grave.accent"),
    Jump    = keybinds:newKeybind("Jump","key.keyboard.space"),
@@ -58,8 +59,8 @@ local RC = {
    ctrl = vectors.vec2(), -- Control Vec
    -->==========[ Attributes ]==========<--
    a_s = 0.1,            -- Speed
-   a_sf = 0.3,            -- Faster Speed
-   a_sfw = 5*20,            -- Faster Speed Wait
+   a_sf = 0.4,            -- Faster Speed
+   a_sfw = 5*10,            -- Faster Speed Wait
    a_f = 0.8,            -- Friction
    is_on_floor = false,
    ldistance_traveled = 0,
@@ -73,7 +74,6 @@ local Camera = {
    transition = 0,
    dist = 2,
 }
-
 -->==========[ Bake/Init ]==========<--
 for _, value in pairs(Parts.engine_wheels) do
    value[1] = 16/value[1]
@@ -115,7 +115,7 @@ Input.Right.release = function () if RC.engine then pings.syncControlSteer(RC.ct
 local throttle_time = 0
 events.TICK:register(function ()
    RC.lstr = RC.str
-   RC.et = RC.et * 0.3 + math.lerp(RC.a_s,RC.a_sf,throttle_time/RC.a_sfw) * RC.ctrl.y
+   RC.et = RC.et * 0.7 + math.lerp(RC.a_s,RC.a_sf,throttle_time/RC.a_sfw) * RC.ctrl.y * 0.4
    if RC.ctrl.y ~= 0 and RC.is_on_floor then
       if throttle_time < RC.a_sfw then
          throttle_time = throttle_time + 1/(throttle_time+1)
@@ -123,13 +123,13 @@ events.TICK:register(function ()
    else
       if throttle_time > 0 then
          if RC.is_on_floor then
-            throttle_time = math.max(throttle_time - 8,0)
+            throttle_time = math.max(throttle_time - 1,0)
          else
-            throttle_time = math.max(throttle_time - 0.5,0)
+            throttle_time = math.max(throttle_time - 0.1,0)
          end
       end
    end
-   RC.str = math.lerp(RC.str,RC.ctrl.x * -25,0.4) / math.clamp(RC.et*5,0.9,10)
+   RC.str = math.lerp(RC.str,RC.ctrl.x * -25,0.4) / math.clamp(RC.et*6,0.9,10)
 end)
 
 -->====================[ Physics ]====================<--
@@ -191,8 +191,11 @@ local function collision(pos,vel,axis)
       end
    end
 end
-
+local sound = sounds:playSound("numero_tres",RC.pos,1,1,true):play()
 events.TICK:register(function ()
+   --sounds:playSound("minecraft:block.piston.contract",RC.pos,0.1,0.5)
+   local e = math.abs(RC.et)
+   sound:play():setPos(RC.pos):setPitch(e+1):setVolume(math.clamp(e*8,0.0,1))
    RC.lpos = RC.pos:copy()
    RC.lvel = RC.vel:copy()
    RC.lrot = RC.rot
@@ -309,8 +312,9 @@ events.POST_WORLD_RENDER:register(function (dt)
    local true_dist_trav = math.lerp(RC.ldistance_traveled,RC.distance_traveled,dt)
    local true_steer = -math.lerp(RC.lstr,RC.str,dt)
    local true_sus = math.lerp(RC.ls,RC.s,dt)
+   local true_rot = math.lerp(RC.lrot,RC.rot,dt)
    --renderer:setCameraPivot(true_pos:copy():add(0,0.5,0))
-   Parts.root:setPos(true_pos * 16):setRot((true_vel.y-Physics.gravity)*-math.sign(RC.loc_vel.z)*90,math.lerp(RC.lrot,RC.rot,dt),0)
+   Parts.root:setPos(true_pos * 16):setRot((true_vel.y-Physics.gravity)*-math.sign(RC.loc_vel.z)*90,true_rot,0)
    Parts.base:setPos(0,true_sus.y,0):setRot(math.deg(true_sus.z)*0.3,0,math.deg(true_sus.x))
    for _, wheelData in pairs(Parts.steer_wheels) do
       wheelData[2]:setRot(math.deg(true_dist_trav)*wheelData[1],true_steer)
@@ -330,9 +334,10 @@ events.POST_WORLD_RENDER:register(function (dt)
          if Camera.transition < 0.01 then
             renderer:setCameraPivot()
          else
-            renderer:setCameraPivot(math.lerp(hpos,true_pos + true_cam_dir,-(math.cos(math.pi * Camera.transition) - 1) / 2))
+            renderer:setCameraPivot(math.lerp(hpos,true_pos:add(0,0.4,0),-(math.cos(math.pi * Camera.transition) - 1) / 2))
          end
       end
+
       renderer:setFOV(math.lerp(1,throttle_time/RC.a_sfw + 1,Camera.transition))
       vanilla_model.RIGHT_ARM:setVisible(not Camera.mode)
       vanilla_model.RIGHT_ITEM:setVisible(not Camera.mode)
