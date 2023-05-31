@@ -51,12 +51,13 @@ local RC = {
    -->==========[ RC car specific ]==========<--
    engine = false,        -- Is Engine Running
    et = 0,                -- Engine Throttle
-   lstr = 0,               -- Steer
+   lstr = 0,              -- Steer
    str = 0,               -- Steer
    ctrl = vectors.vec2(), -- Control Vec
    -->==========[ Attributes ]==========<--
-   a_s = 0.05,            -- Speed
-   a_f = 0.8,             -- Friction
+   a_s = 0.1,            -- Speed
+   a_f = 0.8,            -- Friction
+   is_on_floor = false,
 }
 
 Parts.root:setParentType("World")
@@ -98,9 +99,29 @@ end)
 -->====================[ Physics ]====================<--
 
 events.ENTITY_INIT:register(function ()
-   --RC.pos = player:getPos():add(0,3,0)
-   RC.pos = vectors.vec3(-227.5,83,127.5)
+   RC.pos = player:getPos():add(0,3,0)
+   --RC.pos = vectors.vec3(-227.5,83,127.5)
 end)
+
+local function getStepHeight(pos)
+   local spos = pos:copy()
+   local step_height = 0
+   for i = 1, 10, 1 do
+      local block, brpos = world.getBlockState(spos), spos % 1
+      local bpos = spos - brpos
+      for key, AABB in pairs(block:getCollisionShape()) do
+         if AABB[1].x <= brpos.x and AABB[1].y <= brpos.y and AABB[1].z <= brpos.z
+         and AABB[2].x >= brpos.x and AABB[2].y >= brpos.y and AABB[2].z >= brpos.z then
+            brpos.y = AABB[2].y + Physics.margin
+            spos.y = bpos.y + AABB[2].y + Physics.margin
+            step_height = spos.y-pos.y
+         else
+            break
+         end
+      end
+   end
+   return step_height
+end
 
 local function collision(pos,vel,axis)
    local block, brpos = world.getBlockState(pos), pos % 1
@@ -143,24 +164,42 @@ events.TICK:register(function ()
    
    local r = math.rad(RC.rot)
    do
-      RC.vel.x = RC.vel.x * RC.a_f - math.sin(r) * RC.et
+      if RC.is_on_floor then
+         RC.vel.x = RC.vel.x * RC.a_f - math.sin(r) * RC.et
+      end
       RC.pos.x = RC.pos.x + RC.vel.x
       local result = collision(RC.pos,RC.vel.x,1)
-      if result then RC.pos.x = result RC.vel:mul() end
+      if result then
+         local step_height = getStepHeight(RC.pos)
+         if step_height < 1  then
+            RC.pos.y = RC.pos.y + step_height
+         else
+            RC.pos.x = result RC.vel:mul(0,RC.a_f,RC.a_f)
+         end
+         end
    end
 
    do
       RC.pos.y = RC.pos.y + RC.vel.y
       local result = collision(RC.pos,RC.vel.y,2)
-      if result then RC.pos.y = result RC.vel.y = 0 end
+      if result then RC.pos.y = result RC.vel:mul(RC.a_f,0,RC.a_f) RC.is_on_floor = true else RC.is_on_floor = false end
       RC.vel.y = RC.vel.y + Physics.gravity
    end
    
    do
-      RC.vel.z = RC.vel.z * RC.a_f - math.cos(r) * RC.et
+      if RC.is_on_floor then
+         RC.vel.z = RC.vel.z * RC.a_f - math.cos(r) * RC.et
+      end
       RC.pos.z = RC.pos.z + RC.vel.z
       local result = collision(RC.pos,RC.vel.z,3)
-      if result then RC.pos.z = result RC.vel.z = 0 end
+      if result then
+         local step_height = getStepHeight(RC.pos)
+         if step_height < 1  then
+            RC.pos.y = RC.pos.y + step_height
+         else
+            RC.pos.z = result RC.vel:mul(RC.a_f,RC.a_f,0)
+         end
+      end
    end
 
    RC.loc_lvel = RC.loc_vel:copy()
