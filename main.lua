@@ -3,21 +3,23 @@
  / / __/  |/ / __ `/ __ `__ \/ / __ `__ \/ __ `/ __/ _ \/ ___/
 / /_/ / /|  / /_/ / / / / / / / / / / / / /_/ / /_/  __(__  )
 \____/_/ |_/\__,_/_/ /_/ /_/_/_/ /_/ /_/\__,_/\__/\___/____]]
+H = host:isHost()
 local Parts = {
    root = models.RCcar,
    base = models.RCcar.Base,
    steer_wheels = {
-      models.RCcar.FL,
-      models.RCcar.FR,
+      {4,models.RCcar.FL},
+      {4,models.RCcar.FR},
    },
    engine_wheels = {
-      models.RCcar.BL,
-      models.RCcar.BR,
+      {5,models.RCcar.BL},
+      {5,models.RCcar.BR},
    }
 }
 
 local Input = {
    Start    = keybinds:newKeybind("Start RC Car","key.keyboard.grave.accent"),
+   Jump    = keybinds:newKeybind("Jump","key.keyboard.space"),
    Forward  = keybinds:newKeybind("Throttle Forward","key.keyboard.w"),
    Backward = keybinds:newKeybind("Throttle Backward","key.keyboard.s"),
    Left     = keybinds:newKeybind("Steer Left","key.keyboard.a"),
@@ -34,7 +36,7 @@ local RC = {
    pos = vectors.vec3(),
    
    lvel = vectors.vec3(),
-   vel = vectors.vec3(),
+   vel = vectors.vec3(0.2,0,0.2),
 
    loc_vel = vectors.vec3(),
    loc_lvel = vectors.vec3(),
@@ -56,17 +58,39 @@ local RC = {
    ctrl = vectors.vec2(), -- Control Vec
    -->==========[ Attributes ]==========<--
    a_s = 0.1,            -- Speed
+   a_sf = 0.3,            -- Faster Speed
+   a_sfw = 5*20,            -- Faster Speed Wait
    a_f = 0.8,            -- Friction
    is_on_floor = false,
+   ldistance_traveled = 0,
+   distance_traveled = 0,
 }
 
+local Camera = {
+   ldir = vectors.vec3(1,0.5,0),
+   dir = vectors.vec3(1,0.5,0),
+   mode = false,
+   transition = 0,
+   dist = 2,
+}
+
+-->==========[ Bake/Init ]==========<--
+for _, value in pairs(Parts.engine_wheels) do
+   value[1] = 16/value[1]
+end
+for _, value in pairs(Parts.steer_wheels) do
+   value[1] = 16/value[1]
+end
 Parts.root:setParentType("World")
 
 -->====================[ Input ]====================<--
 
 Input.Start.press = function ()
    RC.engine = not RC.engine
+   Camera.mode = RC.engine
    if RC.engine then
+      pings.syncControlSteer(0)
+      pings.syncControlThrottle(0)
       host:setActionbar('[{"text":"Remote Controll Mode: "},{"text":"Enabled","color":"green"}]')
    else
       host:setActionbar('[{"text":"Remote Controll Mode: "},{"text":"Disabled","color":"red"}]')
@@ -74,33 +98,44 @@ Input.Start.press = function ()
    return true
 end
 
-Input.Forward.press = function () RC.ctrl.y = RC.ctrl.y + 1 return RC.engine end
-Input.Forward.release = function () RC.ctrl.y = RC.ctrl.y - 1 return RC.engine end
+Input.Jump.press = function () if RC.engine and RC.is_on_floor then pings.jump() end return RC.engine end
+Input.Forward.press = function () if RC.engine then pings.syncControlThrottle(RC.ctrl.y + 1) end return RC.engine end
+Input.Forward.release = function () if RC.engine then pings.syncControlThrottle(RC.ctrl.y - 1) end return RC.engine end
 
-Input.Backward.press = function () RC.ctrl.y = RC.ctrl.y - 1 return RC.engine end
-Input.Backward.release = function () RC.ctrl.y = RC.ctrl.y + 1 return RC.engine end
+Input.Backward.press = function () if RC.engine then pings.syncControlThrottle(RC.ctrl.y - 1) end return RC.engine end
+Input.Backward.release = function () if RC.engine then pings.syncControlThrottle(RC.ctrl.y + 1) end return RC.engine end
 
-Input.Left.press = function () RC.ctrl.x = RC.ctrl.x + 1 return RC.engine end
-Input.Left.release = function () RC.ctrl.x = RC.ctrl.x - 1 return RC.engine end
+Input.Left.press = function () if RC.engine then pings.syncControlSteer(RC.ctrl.x + 1) end return RC.engine end
+Input.Left.release = function () if RC.engine then pings.syncControlSteer(RC.ctrl.x - 1) end return RC.engine end
 
-Input.Right.press = function () RC.ctrl.x = RC.ctrl.x - 1 return RC.engine end
-Input.Right.release = function () RC.ctrl.x = RC.ctrl.x + 1 return RC.engine end
+Input.Right.press = function () if RC.engine then pings.syncControlSteer(RC.ctrl.x - 1) end return RC.engine end
+Input.Right.release = function () if RC.engine then pings.syncControlSteer(RC.ctrl.x + 1) end return RC.engine end
 
 
-
+local throttle_time = 0
 events.TICK:register(function ()
-   if RC.engine then
-      RC.lstr = RC.str
-      RC.et = RC.et * 0.3 + RC.a_s * RC.ctrl.y
-      RC.str = RC.ctrl.x * 45
+   RC.lstr = RC.str
+   RC.et = RC.et * 0.3 + math.lerp(RC.a_s,RC.a_sf,throttle_time/RC.a_sfw) * RC.ctrl.y
+   if RC.ctrl.y ~= 0 and RC.is_on_floor then
+      if throttle_time < RC.a_sfw then
+         throttle_time = throttle_time + 1/(throttle_time+1)
+      end
+   else
+      if throttle_time > 0 then
+         if RC.is_on_floor then
+            throttle_time = math.max(throttle_time - 8,0)
+         else
+            throttle_time = math.max(throttle_time - 0.5,0)
+         end
+      end
    end
+   RC.str = math.lerp(RC.str,RC.ctrl.x * -25,0.4) / math.clamp(RC.et*5,0.9,10)
 end)
 
 -->====================[ Physics ]====================<--
 
 events.ENTITY_INIT:register(function ()
-   RC.pos = player:getPos():add(0,3,0)
-   --RC.pos = vectors.vec3(-227.5,83,127.5)
+   RC.pos = player:getPos():add(0,1,0)
 end)
 
 local function getStepHeight(pos)
@@ -171,12 +206,12 @@ events.TICK:register(function ()
       local result = collision(RC.pos,RC.vel.x,1)
       if result then
          local step_height = getStepHeight(RC.pos)
-         if step_height < 1  then
+         if step_height <= 1 then
             RC.pos.y = RC.pos.y + step_height
          else
             RC.pos.x = result RC.vel:mul(0,RC.a_f,RC.a_f)
          end
-         end
+      end
    end
 
    do
@@ -194,7 +229,7 @@ events.TICK:register(function ()
       local result = collision(RC.pos,RC.vel.z,3)
       if result then
          local step_height = getStepHeight(RC.pos)
-         if step_height < 1  then
+         if step_height < 1.1  then
             RC.pos.y = RC.pos.y + step_height
          else
             RC.pos.z = result RC.vel:mul(RC.a_f,RC.a_f,0)
@@ -202,30 +237,106 @@ events.TICK:register(function ()
       end
    end
 
+   local block = world.getBlockState(RC.pos)
+   if block.id == "minecraft:water" then
+      RC.vel = RC.vel * 0.8
+   end
+
    RC.loc_lvel = RC.loc_vel:copy()
-   RC.loc_vel = vectors.vec3(
-      math.cos(-r) * RC.vel.x + math.sin(-r) * RC.vel.z,
-      RC.vel.y,
-      math.sin(r) * -RC.vel.x + math.cos(r) * -RC.vel.z)
+   RC.loc_vel = (RC.vel:augmented() * matrices.mat4():rotateY(-RC.rot)).xyz
    RC.ls = RC.s:copy()
    RC.s = RC.s + RC.sv
    RC.sv = RC.sv * 0.4 + vec(
-      RC.loc_lvel.x - RC.loc_vel.x,
+      RC.loc_vel.x-RC.loc_lvel.x,
       RC.lvel.y - RC.vel.y,
-      RC.loc_lvel.z - RC.loc_vel.z) * 2 - RC.s * 0.9
+      RC.loc_vel.z-RC.loc_lvel.z) * 2 - RC.s * 0.9
    RC.rot = RC.rot + RC.str * RC.loc_vel.z
+   RC.ldistance_traveled = RC.distance_traveled
+   RC.distance_traveled = RC.distance_traveled + RC.loc_vel.z
+   if not H then return end
+   Camera.ldir = Camera.dir:copy()
+   Camera.dir = (Camera.dir - (RC.pos - RC.lpos) / Camera.dist):normalized()
 end)
+
+-->====================[ Networking ]====================<--
+
+local sync_timer = 0
+
+local function snap(number,step)
+   return math.floor(number * step + 0.5) / step
+end
+
+events.TICK:register(function ()
+   if not H then return end
+   sync_timer = sync_timer - 1
+   if sync_timer < 0 then
+      sync_timer = 20
+      pings.syncState(snap(RC.pos.x,10),snap(RC.pos.y,10),snap(RC.pos.z,100),snap(RC.rot,10))
+   end
+end)
+
+function pings.syncControlThrottle(X)
+   RC.ctrl.y = X
+end
+
+function pings.syncControlSteer(Y)
+   RC.ctrl.x = Y
+end
+
+function pings.jump()
+   RC.vel.y = 0.4
+end
+
+function pings.syncState(x,y,z,r)
+   if H then return end
+   RC.pos = vectors.vec3(x,y,z)
+   RC.rot = r
+end
 
 -->====================[ Rendering ]====================<--
 
-events.WORLD_RENDER:register(function (dt)
+local function toAngle(vec3pos)
+   local y = math.atan(vec3pos.x,vec3pos.z)
+   local result = vectors.vec3(math.atan((math.sin(y)*vec3pos.x)+(math.cos(y)*vec3pos.z),vec3pos.y),y)
+   result = vectors.vec3(result.x,result.y,0)
+   result = (result / math.pi) * 180
+   return result
+end
+
+events.POST_WORLD_RENDER:register(function (dt)
    local true_pos = math.lerp(RC.lpos,RC.pos,dt)
+   local true_vel = math.lerp(RC.lvel,RC.vel,dt)
+   local true_dist_trav = math.lerp(RC.ldistance_traveled,RC.distance_traveled,dt)
+   local true_steer = -math.lerp(RC.lstr,RC.str,dt)
    local true_sus = math.lerp(RC.ls,RC.s,dt)
-   Parts.root:setPos(true_pos * 16):setRot(0,math.lerp(RC.lrot,RC.rot,dt),0)
-   Parts.base:setPos(0,true_sus.y,0):setRot(0,0,math.deg(true_sus.x))
-   for key, value in pairs(Parts.steer_wheels) do
-      value:setRot(0,math.lerp(RC.lstr,RC.str,dt))
+   --renderer:setCameraPivot(true_pos:copy():add(0,0.5,0))
+   Parts.root:setPos(true_pos * 16):setRot((true_vel.y-Physics.gravity)*-math.sign(RC.loc_vel.z)*90,math.lerp(RC.lrot,RC.rot,dt),0)
+   Parts.base:setPos(0,true_sus.y,0):setRot(math.deg(true_sus.z)*0.3,0,math.deg(true_sus.x))
+   for _, wheelData in pairs(Parts.steer_wheels) do
+      wheelData[2]:setRot(math.deg(true_dist_trav)*wheelData[1],true_steer)
    end
+   for _, wheelData in pairs(Parts.engine_wheels) do
+      wheelData[2]:setRot(math.deg(true_dist_trav)*wheelData[1],0)
+   end
+   if not H then return end
+      local true_cam_dir = math.lerp(Camera.ldir,Camera.dir,dt):add(0,0.5,0)*Camera.dist
+      if player:isLoaded() then
+         local hpos = player:getPos(dt):add(0,player:getEyeHeight(),0)
+         if Camera.mode then
+            Camera.transition = math.min(Camera.transition + 0.05,1)
+         else
+            Camera.transition = math.max(Camera.transition - 0.05,0)
+         end
+         if Camera.transition < 0.01 then
+            renderer:setCameraPivot()
+         else
+            renderer:setCameraPivot(math.lerp(hpos,true_pos + true_cam_dir,-(math.cos(math.pi * Camera.transition) - 1) / 2))
+         end
+      end
+      renderer:setFOV(math.lerp(1,throttle_time/RC.a_sfw + 1,Camera.transition))
+      vanilla_model.RIGHT_ARM:setVisible(not Camera.mode)
+      vanilla_model.RIGHT_ITEM:setVisible(not Camera.mode)
+      vanilla_model.RIGHT_SLEEVE:setVisible(not Camera.mode)
 end)
 
 return RC
