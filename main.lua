@@ -59,16 +59,19 @@ local RC = {
    ctrl = vectors.vec2(), -- Control Vec
    -->==========[ Attributes ]==========<--
    mat = matrices.mat4(),
-   a_s = 0.4,            -- Speed
+   a_s = 0.4,             -- Speed
    a_sf = 1.2,            -- Faster Speed
-   a_sfw = 5*10,            -- Faster Speed Wait
-   a_f = 0.8,            -- Friction
-   is_on_floor = false,
-   floor_block = nil,
-   ltr = 0,
-   tr = 0,
-   ldistance_traveled = 0,
-   distance_traveled = 0,
+   a_sfw = 5*10,          -- Faster Speed Wait
+   a_f = 0.8,             -- Friction
+   is_on_floor = false,   -- is on the floor
+   floor_block = nil,     -- the block the car is on, nil if air or transparent
+   ltr = 0,               -- last throttle distance
+   tr = 0,                -- throttle distance
+   ldistance_traveled = 0,-- last distance traveled
+   distance_traveled = 0, -- distance traveled
+   lj = 0.8,              --low jump
+   hj = 0.2,              -- high jump
+   hjw = 1*20           -- high jump wait
 }
 
 local Camera = {
@@ -86,7 +89,7 @@ for _, value in pairs(Parts.steer_wheels) do
    value[1] = 16/value[1]
 end
 Parts.root:setParentType("World")
-
+local jump_power = 0
 -->====================[ Input ]====================<--
 
 Input.Start.press = function ()
@@ -102,7 +105,8 @@ Input.Start.press = function ()
    return true
 end
 
-Input.Jump.press = function () if RC.engine and RC.is_on_floor then pings.jump() end return RC.engine end
+Input.Jump.press = function () jump_power = 0 return RC.engine end
+Input.Jump.release = function () if RC.engine and RC.is_on_floor then pings.jump(math.lerp(RC.hj,RC.lj,jump_power / RC.hjw)) jump_power = 0 end return RC.engine end
 Input.Forward.press = function () if RC.engine then pings.syncControlThrottle(RC.ctrl.y + 1) end return RC.engine end
 Input.Forward.release = function () if RC.engine then pings.syncControlThrottle(RC.ctrl.y - 1) end return RC.engine end
 
@@ -118,6 +122,11 @@ Input.Right.release = function () if RC.engine then pings.syncControlSteer(RC.ct
 
 local throttle_time = 0
 events.TICK:register(function ()
+   if Input.Jump:isPressed() then
+      if jump_power < RC.hjw then
+         jump_power = jump_power + 1
+      end
+   end
    RC.lstr = RC.str
    RC.et = RC.et * 0.7 + math.lerp(RC.a_s,RC.a_sf,throttle_time/RC.a_sfw) * RC.ctrl.y * 0.4
    if RC.ctrl.y ~= 0 and RC.is_on_floor then
@@ -301,8 +310,8 @@ function pings.syncControlSteer(Y)
    RC.ctrl.x = Y
 end
 
-function pings.jump()
-   RC.vel.y = 0.4
+function pings.jump(power)
+   RC.vel.y = power
 end
 
 function pings.syncState(x,y,z,r)
@@ -336,10 +345,10 @@ events.POST_WORLD_RENDER:register(function (dt)
       wheelData[2]:setRot(math.deg(true_dist_trav)*wheelData[1],true_steer)
    end
    for _, wheelData in pairs(Parts.engine_wheels) do
-      wheelData[2]:setRot(math.deg(throttle_trav)*wheelData[1],0)
+      wheelData[2]:setRot(math.deg(throttle_trav)*wheelData[1] / 4,0)
       --print(RC.et+RC.loc_vel.z*2)
       if (math.abs(RC.et+RC.loc_vel.z * 2) > 0.2 or math.abs(RC.loc_vel.x) > 0.05) and RC.is_on_floor then
-         particles:newParticle("minecraft:block "..RC.floor_block.id,wheelData[2]:partToWorldMatrix().c4.xyz,RC.mat.c3.xyz*RC.et*10)
+         particles:newParticle("minecraft:block "..RC.floor_block.id,wheelData[2]:partToWorldMatrix().c4.xyz,RC.mat.c3.xyz*RC.et*100)
       end
    end
    if not H then return end
