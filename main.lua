@@ -204,11 +204,11 @@ local function collision(pos,vel,axis)
       end
    end
 end
-local sound = sounds:playSound("numero_tres",RC.pos,1,1,true):play()
+--local sound = sounds:playSound("numero_tres",RC.pos,1,1,true):play()
 events.TICK:register(function ()
    --sounds:playSound("minecraft:block.piston.contract",RC.pos,0.1,0.5)
    local e = math.abs(RC.et)
-   sound:play():setPos(RC.pos):setPitch(e*0.8+0.8):setVolume(math.clamp(e*8,0.0,1))
+   --sound:setPos(RC.pos):setPitch(e*0.8+0.8):setVolume(math.clamp(e*8,0.0,1))
    RC.lpos = RC.pos:copy()
    RC.lvel = RC.vel:copy()
    RC.lrot = RC.rot
@@ -243,7 +243,11 @@ events.TICK:register(function ()
          RC.vel.z = RC.vel.z * RC.a_f - math.cos(r) * RC.et * (1-RC.a_f)
          local block = world.getBlockState(RC.pos:add(0,-0.01,0))
          RC.a_f = block:getFriction()
-         RC.floor_block = block
+         if block:hasCollision() then
+            RC.floor_block = block
+         else
+            RC.floor_block = nil
+         end
          --print(RC.a_f,block.id)
          RC.pos:add(0,0.01,0)
       else
