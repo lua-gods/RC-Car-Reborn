@@ -58,11 +58,15 @@ local RC = {
    str = 0,               -- Steer
    ctrl = vectors.vec2(), -- Control Vec
    -->==========[ Attributes ]==========<--
-   a_s = 0.1,            -- Speed
-   a_sf = 0.4,            -- Faster Speed
+   mat = matrices.mat4(),
+   a_s = 0.4,            -- Speed
+   a_sf = 1.2,            -- Faster Speed
    a_sfw = 5*10,            -- Faster Speed Wait
    a_f = 0.8,            -- Friction
    is_on_floor = false,
+   floor_block = nil,
+   ltr = 0,
+   tr = 0,
    ldistance_traveled = 0,
    distance_traveled = 0,
 }
@@ -129,7 +133,7 @@ events.TICK:register(function ()
          end
       end
    end
-   RC.str = math.lerp(RC.str,RC.ctrl.x * -25,0.4) / math.clamp(RC.et*6,0.9,10)
+   RC.str = math.lerp(RC.str,RC.ctrl.x * -25,0.4) / math.clamp(math.abs(RC.et)+0.4,0.9,10)
 end)
 
 -->====================[ Physics ]====================<--
@@ -195,15 +199,16 @@ local sound = sounds:playSound("numero_tres",RC.pos,1,1,true):play()
 events.TICK:register(function ()
    --sounds:playSound("minecraft:block.piston.contract",RC.pos,0.1,0.5)
    local e = math.abs(RC.et)
-   sound:play():setPos(RC.pos):setPitch(e+1):setVolume(math.clamp(e*8,0.0,1))
+   sound:play():setPos(RC.pos):setPitch(e*0.8+0.8):setVolume(math.clamp(e*8,0.0,1))
    RC.lpos = RC.pos:copy()
    RC.lvel = RC.vel:copy()
    RC.lrot = RC.rot
+   RC.ltr = RC.tr
    
    local r = math.rad(RC.rot)
    do
       if RC.is_on_floor then
-         RC.vel.x = RC.vel.x * RC.a_f - math.sin(r) * RC.et
+         RC.vel.x = RC.vel.x * RC.a_f - math.sin(r) * RC.et * (1-RC.a_f)
       end
       RC.pos.x = RC.pos.x + RC.vel.x
       local result = collision(RC.pos,RC.vel.x,1)
@@ -226,7 +231,14 @@ events.TICK:register(function ()
    
    do
       if RC.is_on_floor then
-         RC.vel.z = RC.vel.z * RC.a_f - math.cos(r) * RC.et
+         RC.vel.z = RC.vel.z * RC.a_f - math.cos(r) * RC.et * (1-RC.a_f)
+         local block = world.getBlockState(RC.pos:add(0,-0.01,0))
+         RC.a_f = block:getFriction()
+         RC.floor_block = block
+         --print(RC.a_f,block.id)
+         RC.pos:add(0,0.01,0)
+      else
+         RC.floor_block = nil
       end
       RC.pos.z = RC.pos.z + RC.vel.z
       local result = collision(RC.pos,RC.vel.z,3)
@@ -245,8 +257,11 @@ events.TICK:register(function ()
       RC.vel = RC.vel * 0.8
    end
 
+   RC.tr = RC.tr + RC.et * 4
    RC.loc_lvel = RC.loc_vel:copy()
-   RC.loc_vel = (RC.vel:augmented() * matrices.mat4():rotateY(-RC.rot)).xyz
+   local locMat =  matrices.mat4():rotateY(-RC.rot)
+   RC.loc_vel = (RC.vel:augmented() * locMat).xyz
+   RC.mat = locMat
    RC.ls = RC.s:copy()
    RC.s = RC.s + RC.sv
    RC.sv = RC.sv * 0.4 + vec(
@@ -310,6 +325,7 @@ events.POST_WORLD_RENDER:register(function (dt)
    local true_pos = math.lerp(RC.lpos,RC.pos,dt)
    local true_vel = math.lerp(RC.lvel,RC.vel,dt)
    local true_dist_trav = math.lerp(RC.ldistance_traveled,RC.distance_traveled,dt)
+   local throttle_trav = -math.lerp(RC.ltr,RC.tr,dt)
    local true_steer = -math.lerp(RC.lstr,RC.str,dt)
    local true_sus = math.lerp(RC.ls,RC.s,dt)
    local true_rot = math.lerp(RC.lrot,RC.rot,dt)
@@ -320,7 +336,11 @@ events.POST_WORLD_RENDER:register(function (dt)
       wheelData[2]:setRot(math.deg(true_dist_trav)*wheelData[1],true_steer)
    end
    for _, wheelData in pairs(Parts.engine_wheels) do
-      wheelData[2]:setRot(math.deg(true_dist_trav)*wheelData[1],0)
+      wheelData[2]:setRot(math.deg(throttle_trav)*wheelData[1],0)
+      --print(RC.et+RC.loc_vel.z*2)
+      if (math.abs(RC.et+RC.loc_vel.z * 2) > 0.2 or math.abs(RC.loc_vel.x) > 0.05) and RC.is_on_floor then
+         particles:newParticle("minecraft:block "..RC.floor_block.id,wheelData[2]:partToWorldMatrix().c4.xyz,RC.mat.c3.xyz*RC.et*10)
+      end
    end
    if not H then return end
       local true_cam_dir = math.lerp(Camera.ldir,Camera.dir,dt):add(0,0.5,0)*Camera.dist
