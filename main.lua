@@ -138,7 +138,7 @@ end
 
 local honk_cooldown = 0
 Input.Honk.press = function ()
-   if honk_cooldown >= 0 then
+   if honk_cooldown <= 0 then
       honk_cooldown = 10
       pings.honk()
    end
