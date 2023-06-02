@@ -302,6 +302,7 @@ events.TICK:register(function ()
    local block = world.getBlockState(RC.pos)
    if block.id == "minecraft:water" then
       RC.vel = RC.vel * 0.8
+      RC.vel.y = RC.vel.y + 0.04
    end
 
    RC.tr = RC.tr + RC.et * 4
@@ -431,8 +432,13 @@ events.POST_WORLD_RENDER:register(function (dt)
          else
             local transition = -(math.cos(math.pi * Camera.transition) - 1) / 2
             if renderer:isFirstPerson() then
-               renderer:setCameraPivot(math.lerp(hpos,true_pos:add(0,0.45,0),transition))
-               renderer:setCameraRot(crot.x,math.lerp(crot.y,(crot.y-true_rot)%360,transition),math.deg(true_locvel.x)*.3)
+               renderer:setCameraPivot(math.lerp(hpos,true_pos:add(0,0.45+(true_sus.y)/16,0),transition))
+               local shake = vectors.vec2()
+               if RC.is_on_floor then
+                  local intensity = math.min(RC.vel.xz:length(),2)
+                  shake = vectors.vec2(intensity*(math.random()-.5),intensity*(math.random()-.5))
+               end
+               renderer:setCameraRot(crot.x+shake.x,math.lerp(crot.y,(crot.y-true_rot)%360,transition),math.deg(true_sus.x)*.3+shake.y)
                models.RCcar.root.Base.Doll.B.H:setVisible(transition < 0.95)
             else
                models.RCcar.root.Base.Doll.B.H:setVisible(true)
