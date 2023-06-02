@@ -30,7 +30,8 @@ local Input = {
 }
 
 local Physics = {
-   gravity = -0.05,
+   gravity = -0.07,
+   jump_gravity = -0.03,
    margin = 0.001,
 }
 local RC = {
@@ -69,11 +70,10 @@ local RC = {
    floor_block = nil,     -- the block the car is on, nil if air or transparent
    ltr = 0,               -- last throttle distance
    tr = 0,                -- throttle distance
+   g = Physics.gravity,   -- gravity
    ldistance_traveled = 0,-- last distance traveled
    distance_traveled = 0, -- distance traveled
-   lj = 0.8,              --low jump
-   hj = 0.2,              -- high jump
-   hjw = 1*20           -- high jump wait
+   jump_height = 0.3,     -- jump height
 }
 
 local Camera = {
@@ -138,14 +138,14 @@ end
 
 local honk_cooldown = 0
 Input.Honk.press = function ()
-   if honk_cooldown <= 0 then
+   if honk_cooldown <= 0 and RC.engine then
       honk_cooldown = 10
       pings.honk()
    end
 end
 
-Input.Jump.press = function () jump_power = 0 return RC.engine end
-Input.Jump.release = function () if RC.engine and RC.is_on_floor then pings.jump(math.lerp(RC.hj,RC.lj,jump_power / RC.hjw)) jump_power = 0 end return RC.engine end
+Input.Jump.press = function () if RC.engine and RC.is_on_floor then pings.jump() end return RC.engine end
+Input.Jump.release = function () if RC.engine then pings.unjump() end end
 Input.Forward.press = function () if RC.engine then pings.syncControlThrottle(RC.ctrl.y + 1) end return RC.engine end
 Input.Forward.release = function () if RC.engine then pings.syncControlThrottle(RC.ctrl.y - 1) end return RC.engine end
 
@@ -161,11 +161,6 @@ Input.Right.release = function () if RC.engine then pings.syncControlSteer(RC.ct
 
 local th_pow = 0
 events.TICK:register(function ()
-   if Input.Jump:isPressed() and RC.engine then
-      if jump_power < RC.hjw then
-         jump_power = jump_power + 1
-      end
-   end
    RC.lstr = RC.str
    RC.et = RC.et * 0.7 + math.lerp(RC.a_s,RC.a_sf,th_pow/RC.a_sfw) * RC.ctrl.y * 0.4
    if RC.is_on_floor and RC.ctrl.x == 0 then
@@ -261,7 +256,7 @@ events.TICK:register(function ()
       RC.pos.y = RC.pos.y + RC.vel.y
       local result = collision(RC.pos,RC.vel.y,2)
       if result then RC.pos.y = result RC.vel:mul(RC.a_f,0,RC.a_f) RC.is_on_floor = true else RC.is_on_floor = false end
-      RC.vel.y = RC.vel.y + Physics.gravity
+      RC.vel.y = RC.vel.y + RC.g
       local block = world.getBlockState(RC.pos:add(0,-0.01,0))
       if block:hasCollision() then
          RC.floor_block = block
@@ -324,6 +319,13 @@ events.TICK:register(function ()
    RC.rot = RC.rot + RC.str * RC.loc_vel.z
    RC.ldistance_traveled = RC.distance_traveled
    RC.distance_traveled = RC.distance_traveled + RC.loc_vel.z
+
+   if math.abs(RC.loc_vel.z) > 0.1 then
+      if RC.floor_block then
+         sounds:playSound(RC.floor_block:getSounds().step,RC.pos,0.3)
+      end
+   end
+
    if not H then return end
    Camera.ldir = Camera.dir:copy()
    Camera.dir = (Camera.dir - (RC.pos - RC.lpos) / Camera.dist):normalized()
@@ -354,8 +356,13 @@ function pings.syncControlSteer(Y)
    RC.ctrl.x = Y
 end
 
-function pings.jump(power)
-   RC.vel.y = power
+function pings.jump()
+   RC.vel.y = RC.jump_height
+   RC.g = Physics.jump_gravity
+end
+
+function pings.unjump()
+   RC.g = Physics.gravity
 end
 
 function pings.syncState(x,y,z,r)
@@ -425,7 +432,7 @@ events.POST_WORLD_RENDER:register(function (dt)
             local transition = -(math.cos(math.pi * Camera.transition) - 1) / 2
             if renderer:isFirstPerson() then
                renderer:setCameraPivot(math.lerp(hpos,true_pos:add(0,0.45,0),transition))
-               renderer:setCameraRot(crot.x,math.lerp(crot.y,crot.y-true_rot,transition),math.deg(true_locvel.x)*.3)
+               renderer:setCameraRot(crot.x,math.lerp(crot.y,(crot.y-true_rot)%360,transition),math.deg(true_locvel.x)*.3)
                models.RCcar.root.Base.Doll.B.H:setVisible(transition < 0.95)
             else
                models.RCcar.root.Base.Doll.B.H:setVisible(true)
