@@ -3,6 +3,7 @@
  / / __/  |/ / __ `/ __ `__ \/ / __ `__ \/ __ `/ __/ _ \/ ___/
 / /_/ / /|  / /_/ / / / / / / / / / / / / /_/ / /_/  __(__  )
 \____/_/ |_/\__,_/_/ /_/ /_/_/_/ /_/ /_/\__,_/\__/\___/____]]
+
 H = host:isHost()
 local Parts = {
    root = models.RCcar.root,
@@ -14,7 +15,7 @@ local Parts = {
    engine_wheels = {
       {5,models.RCcar.root.Wheel.BL},
       {5,models.RCcar.root.Wheel.BR},
-   }
+   },
 }
 
 models.RCcar.root.Base.Doll:setPrimaryTexture("SKIN")
@@ -37,7 +38,7 @@ local RC = {
    pos = vectors.vec3(),
    
    lvel = vectors.vec3(),
-   vel = vectors.vec3(0.2,0,0.2),
+   vel = vectors.vec3(),
 
    loc_vel = vectors.vec3(),
    loc_lvel = vectors.vec3(),
@@ -75,11 +76,14 @@ local RC = {
 }
 
 local Camera = {
-   ldir = vectors.vec3(1,0.5,0),
-   dir = vectors.vec3(1,0.5,0),
+   ldir = vectors.vec3(0,0,-1),
+   dir = vectors.vec3(0,0,-1),
    mode = false,
    transition = 0,
-   dist = 2,
+   dist = 3,
+   rot_offset = 0,
+
+   transition_duration = 1,
 
    lcam_dist = 0,
    cam_dist = 0,
@@ -94,6 +98,7 @@ for _, value in pairs(Parts.steer_wheels) do
 end
 Parts.root:setParentType("World")
 local jump_power = 0
+Camera.transition_duration = Camera.transition_duration / 10
 -->====================[ Input ]====================<--
 
 Input.Start.press = function ()
@@ -102,6 +107,9 @@ Input.Start.press = function ()
    if RC.engine then
       pings.syncControlSteer(0)
       pings.syncControlThrottle(0)
+      if player:isLoaded() then
+         Camera.dir = RC.mat.c3.xyz
+      end
       host:setActionbar('[{"text":"Remote Controll Mode: "},{"text":"Enabled","color":"green"}]')
    else
       host:setActionbar('[{"text":"Remote Controll Mode: "},{"text":"Disabled","color":"red"}]')
@@ -126,7 +134,7 @@ Input.Right.release = function () if RC.engine then pings.syncControlSteer(RC.ct
 
 local th_pow = 0
 events.TICK:register(function ()
-   if Input.Jump:isPressed() then
+   if Input.Jump:isPressed() and RC.engine then
       if jump_power < RC.hjw then
          jump_power = jump_power + 1
       end
@@ -204,7 +212,7 @@ local function collision(pos,vel,axis)
       end
    end
 end
---local engine_sound = sounds:playSound("numero_tres",RC.pos,1,1,true):play()
+local engine_sound = sounds:playSound("numero_dos",RC.pos,1,1,true):play()
 events.TICK:register(function ()
    Camera.lcam_dist = Camera.cam_dist
    local cdist = (RC.pos-client:getCameraPos()):length()
@@ -213,7 +221,7 @@ events.TICK:register(function ()
    --sounds:playSound("minecraft:block.piston.contract",RC.pos,0.1,0.5)
    local e = math.abs(RC.et)
    --print(Camera.doppler)
-   --engine_sound:setPos(RC.pos):setPitch((e*0.8+0.8) * Camera.doppler):setVolume(math.clamp(e*8,0.0,1))
+   engine_sound:setPos(RC.pos):setPitch((e*0.8+0.8) * Camera.doppler):setVolume(math.clamp((math.clamp(e*8,0.0,1)/cdist^2)*5,0,0.2))
    RC.lpos = RC.pos:copy()
    RC.lvel = RC.vel:copy()
    RC.lrot = RC.rot
@@ -328,13 +336,13 @@ end
 
 -->====================[ Rendering ]====================<--
 
-local function toAngle(vec3pos)
-   local y = math.atan(vec3pos.x,vec3pos.z)
-   local result = vectors.vec3(math.atan((math.sin(y)*vec3pos.x)+(math.cos(y)*vec3pos.z),vec3pos.y),y)
-   result = vectors.vec3(result.x,result.y,0)
-   result = (result / math.pi) * 180
-   return result
-end
+local delta_frame = 0
+local lsys_time = client:getSystemTime()
+events.WORLD_RENDER:register(function (delta)
+   local sys_time = client:getSystemTime()
+   delta_frame = (sys_time-lsys_time) * 0.01
+   lsys_time = sys_time
+end)
 
 events.POST_WORLD_RENDER:register(function (dt)
    local true_pos = math.lerp(RC.lpos,RC.pos,dt)
@@ -345,7 +353,7 @@ events.POST_WORLD_RENDER:register(function (dt)
    local true_sus = math.lerp(RC.ls,RC.s,dt)
    local true_rot = math.lerp(RC.lrot,RC.rot,dt)
    --renderer:setCameraPivot(true_pos:copy():add(0,0.5,0))
-   Parts.root:setPos(true_pos * 16):setRot((true_vel.y-Physics.gravity)*-math.sign(RC.loc_vel.z)*90,true_rot,0)
+   Parts.root:setPos(true_pos * 16):setRot((true_vel.y-Physics.gravity)*-math.sign(math.floor(RC.loc_vel.z*100+0.5)/100)*90,true_rot,0)
    Parts.base:setPos(0,true_sus.y,0):setRot(math.deg(true_sus.z)*0.3,0,math.deg(true_sus.x))
    for _, wheelData in pairs(Parts.steer_wheels) do
       wheelData[2]:setRot(math.deg(true_dist_trav)*wheelData[1],true_steer)
@@ -357,23 +365,52 @@ events.POST_WORLD_RENDER:register(function (dt)
       end
    end
 
+   -->==========[ Doll Procedural Animation ]==========<--
+   models.RCcar.root.Base.Doll.B.LA:setRot(60-true_steer,-(true_steer*true_steer)*0.01-5,0)
+   models.RCcar.root.Base.Doll.B.RA:setRot(60+true_steer,5+(true_steer*true_steer)*0.01,0)
+   models.RCcar.root.Base.SteeringWheel.Hinge:setRot(0,true_steer,0)
+   models.RCcar.root.Base.Doll.B:setRot(0,0,true_steer*0.1)
+
    if not H then return end
+      if not player:isLoaded() then return end
+      local crot = player:getRot()
+      crot.y = (crot.y) % 360 -- <=== El stupido
       local true_cam_dir = math.lerp(Camera.ldir,Camera.dir,dt):add(0,0.5,0)*Camera.dist
       if player:isLoaded() then
          local hpos = player:getPos(dt):add(0,player:getEyeHeight(),0)
          if Camera.mode then
-            Camera.transition = math.min(Camera.transition + 0.05,1)
+            Camera.transition = math.min(Camera.transition + delta_frame * Camera.transition_duration,1)
          else
-            Camera.transition = math.max(Camera.transition - 0.05,0)
+            Camera.transition = math.max(Camera.transition - delta_frame * Camera.transition_duration,0)
          end
-         if Camera.transition < 0.01 then
+         if Camera.transition < 0.001 then
             renderer:setCameraPivot()
+            renderer:setCameraRot()
          else
-            renderer:setCameraPivot(math.lerp(hpos,true_pos:add(0,0.4,0),-(math.cos(math.pi * Camera.transition) - 1) / 2))
+            local transition = -(math.cos(math.pi * Camera.transition) - 1) / 2
+            if renderer:isFirstPerson() then
+               renderer:setCameraPivot(math.lerp(hpos,true_pos:add(0,0.45,0),transition))
+               renderer:setCameraRot(crot.x,math.lerp(crot.y,crot.y-true_rot,transition),0)
+               models.RCcar.root.Base.Doll.B.H:setVisible(transition < 0.95)
+            else
+               models.RCcar.root.Base.Doll.B.H:setVisible(true)
+               renderer:setCameraPivot(math.lerp(hpos,true_pos:add(0,0.4,0),transition))
+               renderer:setCameraRot(crot.x,math.lerp(crot.y, math.deg(math.atan2(true_cam_dir.z,true_cam_dir.x))+90,transition),0)
+            end
          end
       end
+   renderer:setFOV(math.lerp(1,th_pow/RC.a_sfw + 1,Camera.transition))
+end)
 
-      renderer:setFOV(math.lerp(1,th_pow/RC.a_sfw + 1,Camera.transition))
+local lprot = vectors.vec2()
+events.POST_RENDER:register(function (x,y)
+   if not player:isLoaded() then return end
+   local prot = player:getRot()
+   local d = lprot-prot
+   lprot = prot
+   if not renderer:isFirstPerson() and RC.engine then
+      Camera.dir = vectors.rotateAroundAxis(d.y,Camera.dir,vectors.vec3(0,1,0))
+   end
 end)
 
 events.RENDER:register(function (delta, context)
