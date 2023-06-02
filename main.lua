@@ -229,16 +229,16 @@ local function collision(pos,vel,axis)
       end
    end
 end
-local engine_sound = sounds:playSound("numero_dos",RC.pos,1,1,true):play()
+--local engine_sound = sounds:playSound("numero_dos",RC.pos,1,0,true):play()
 events.TICK:register(function ()
-   Camera.lcam_dist = Camera.cam_dist
-   local cdist = (RC.pos-client:getCameraPos()):length()
-   Camera.cam_dist = cdist
-   Camera.doppler = math.clamp(Camera.lcam_dist-Camera.cam_dist,-0.9,0.9) * 0.3 +1
+   --Camera.lcam_dist = Camera.cam_dist
+   --local cdist = (RC.pos-client:getCameraPos()):length()
+   --Camera.cam_dist = cdist
+   --Camera.doppler = math.clamp(Camera.lcam_dist-Camera.cam_dist,-0.9,0.9) * 0.3 +1
    --sounds:playSound("minecraft:block.piston.contract",RC.pos,0.1,0.5)
-   local e = math.abs(RC.et)
+   --local e = math.abs(RC.et)
    --print(Camera.doppler)
-   engine_sound:setPos(RC.pos):setPitch((e*0.8+0.8) * Camera.doppler):setVolume(math.clamp((math.clamp(e*8,0.0,1)/cdist^2)*5,0,0.2))
+   --engine_sound:setPos(RC.pos):setPitch((e*0.8+0.8) * Camera.doppler):setVolume(math.clamp((math.clamp(e*8,0.0,1)/cdist^2)*5,0,0.1))
    RC.lpos = RC.pos:copy()
    RC.lvel = RC.vel:copy()
    RC.lrot = RC.rot
