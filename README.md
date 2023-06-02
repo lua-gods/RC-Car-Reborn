@@ -11,6 +11,7 @@
 | ` | Toggles between Control mode |
 | WS | Throttles the RC (Requires Control mode) |
 | AD | Steers the RC (Requires Control mode) |
+| F | Honk |
 
 ## 🏎️ New since Prewrite🏁 
 * Suspension
