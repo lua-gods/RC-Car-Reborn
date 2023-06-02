@@ -17,7 +17,7 @@ local Parts = {
    }
 }
 
-models:setSecondaryTexture("SPECULAR",textures:newTexture("wie",1,1):setPixel(0,0,vectors.vec4(0,1,0,1)))
+models.RCcar.root.Base.Doll:setPrimaryTexture("SKIN")
 local Input = {
    Start    = keybinds:newKeybind("Start RC Car","key.keyboard.grave.accent"),
    Jump    = keybinds:newKeybind("Jump","key.keyboard.space"),
@@ -80,6 +80,10 @@ local Camera = {
    mode = false,
    transition = 0,
    dist = 2,
+
+   lcam_dist = 0,
+   cam_dist = 0,
+   doppler = 1,
 }
 -->==========[ Bake/Init ]==========<--
 for _, value in pairs(Parts.engine_wheels) do
@@ -120,7 +124,7 @@ Input.Right.press = function () if RC.engine then pings.syncControlSteer(RC.ctrl
 Input.Right.release = function () if RC.engine then pings.syncControlSteer(RC.ctrl.x + 1) end return RC.engine end
 
 
-local throttle_time = 0
+local th_pow = 0
 events.TICK:register(function ()
    if Input.Jump:isPressed() then
       if jump_power < RC.hjw then
@@ -128,19 +132,15 @@ events.TICK:register(function ()
       end
    end
    RC.lstr = RC.str
-   RC.et = RC.et * 0.7 + math.lerp(RC.a_s,RC.a_sf,throttle_time/RC.a_sfw) * RC.ctrl.y * 0.4
-   if RC.ctrl.y ~= 0 and RC.is_on_floor then
-      if throttle_time < RC.a_sfw then
-         throttle_time = throttle_time + 1/(throttle_time+1)
+   RC.et = RC.et * 0.7 + math.lerp(RC.a_s,RC.a_sf,th_pow/RC.a_sfw) * RC.ctrl.y * 0.4
+   if RC.is_on_floor and RC.ctrl.x == 0 then
+      if RC.ctrl.y ~= 0 then
+         th_pow = math.min(th_pow + 1/(th_pow+1),RC.a_sfw)
+      else
+         th_pow = math.max(th_pow - 1,0)
       end
    else
-      if throttle_time > 0 then
-         if RC.is_on_floor then
-            throttle_time = math.max(throttle_time - 1,0)
-         else
-            throttle_time = math.max(throttle_time - 0.1,0)
-         end
-      end
+      th_pow = math.max(th_pow - 0.1,0)
    end
    RC.str = math.lerp(RC.str,RC.ctrl.x * -25,0.4) / math.clamp(math.abs(RC.et)+0.4,0.9,10)
 end)
@@ -204,60 +204,61 @@ local function collision(pos,vel,axis)
       end
    end
 end
---local sound = sounds:playSound("numero_tres",RC.pos,1,1,true):play()
+--local engine_sound = sounds:playSound("numero_tres",RC.pos,1,1,true):play()
 events.TICK:register(function ()
+   Camera.lcam_dist = Camera.cam_dist
+   local cdist = (RC.pos-client:getCameraPos()):length()
+   Camera.cam_dist = cdist
+   Camera.doppler = math.clamp(Camera.lcam_dist-Camera.cam_dist,-0.9,0.9) * 0.3 +1
    --sounds:playSound("minecraft:block.piston.contract",RC.pos,0.1,0.5)
    local e = math.abs(RC.et)
-   --sound:setPos(RC.pos):setPitch(e*0.8+0.8):setVolume(math.clamp(e*8,0.0,1))
+   --print(Camera.doppler)
+   --engine_sound:setPos(RC.pos):setPitch((e*0.8+0.8) * Camera.doppler):setVolume(math.clamp(e*8,0.0,1))
    RC.lpos = RC.pos:copy()
    RC.lvel = RC.vel:copy()
    RC.lrot = RC.rot
    RC.ltr = RC.tr
-   
-   local r = math.rad(RC.rot)
-   do
-      if RC.is_on_floor then
-         RC.vel.x = RC.vel.x * RC.a_f - math.sin(r) * RC.et * (1-RC.a_f)
-      end
-      RC.pos.x = RC.pos.x + RC.vel.x
-      local result = collision(RC.pos,RC.vel.x,1)
-      if result then
-         local step_height = getStepHeight(RC.pos)
-         if step_height <= 1 then
-            RC.pos.y = RC.pos.y + step_height
-         else
-            RC.pos.x = result RC.vel:mul(0,RC.a_f,RC.a_f)
-         end
-      end
-   end
 
    do
       RC.pos.y = RC.pos.y + RC.vel.y
       local result = collision(RC.pos,RC.vel.y,2)
       if result then RC.pos.y = result RC.vel:mul(RC.a_f,0,RC.a_f) RC.is_on_floor = true else RC.is_on_floor = false end
       RC.vel.y = RC.vel.y + Physics.gravity
+      local block = world.getBlockState(RC.pos:add(0,-0.01,0))
+      if block:hasCollision() then
+         RC.floor_block = block
+         RC.a_f = block:getFriction()
+      else
+         RC.floor_block = nil
+      end
+      RC.pos:add(0,0.01,0)
+   end
+
+   do
+      if RC.is_on_floor then
+         RC.vel.x = RC.vel.x * RC.a_f - RC.mat.c3.x * RC.et * (1-RC.a_f)
+      end
+      RC.pos.x = RC.pos.x + RC.vel.x
+      local result = collision(RC.pos,RC.vel.x,1)
+      if result then
+         local step_height = getStepHeight(RC.pos)
+         if step_height <= 1.1 then
+            RC.pos.y = RC.pos.y + step_height
+         else
+            RC.pos.x = result RC.vel:mul(0,RC.a_f,RC.a_f)
+         end
+      end
    end
    
    do
       if RC.is_on_floor then
-         RC.vel.z = RC.vel.z * RC.a_f - math.cos(r) * RC.et * (1-RC.a_f)
-         local block = world.getBlockState(RC.pos:add(0,-0.01,0))
-         RC.a_f = block:getFriction()
-         if block:hasCollision() then
-            RC.floor_block = block
-         else
-            RC.floor_block = nil
-         end
-         --print(RC.a_f,block.id)
-         RC.pos:add(0,0.01,0)
-      else
-         RC.floor_block = nil
+         RC.vel.z = RC.vel.z * RC.a_f - RC.mat.c3.z * RC.et * (1-RC.a_f)
       end
       RC.pos.z = RC.pos.z + RC.vel.z
       local result = collision(RC.pos,RC.vel.z,3)
       if result then
          local step_height = getStepHeight(RC.pos)
-         if step_height < 1.1  then
+         if step_height <= 1 then
             RC.pos.y = RC.pos.y + step_height
          else
             RC.pos.z = result RC.vel:mul(RC.a_f,RC.a_f,0)
@@ -271,9 +272,10 @@ events.TICK:register(function ()
    end
 
    RC.tr = RC.tr + RC.et * 4
-   RC.loc_lvel = RC.loc_vel:copy()
-   local locMat =  matrices.mat4():rotateY(-RC.rot)
-   RC.loc_vel = (RC.vel:augmented() * locMat).xyz
+   RC.loc_lvel = RC.loc_vel
+   local locMat =  matrices.mat4():rotateY(RC.rot)
+   RC.loc_vel = (RC.vel:copy():mul(-1,1,1):augmented() * locMat).xyz
+   --print(RC.loc_vel.z,locMat.c3.xz)
    RC.mat = locMat
    RC.ls = RC.s:copy()
    RC.s = RC.s + RC.sv
@@ -350,11 +352,11 @@ events.POST_WORLD_RENDER:register(function (dt)
    end
    for _, wheelData in pairs(Parts.engine_wheels) do
       wheelData[2]:setRot(math.deg(throttle_trav)*wheelData[1] / 4,0)
-      --print(RC.et+RC.loc_vel.z*2)
-      if (math.abs(RC.et+RC.loc_vel.z * 2) > 0.2 or math.abs(RC.loc_vel.x) > 0.05) and RC.is_on_floor then
+      if (math.abs(RC.et+RC.loc_vel.z / RC.a_f) > 0.2 or math.abs(RC.loc_vel.x) > 0.05) and RC.is_on_floor then
          particles:newParticle("minecraft:block "..RC.floor_block.id,wheelData[2]:partToWorldMatrix().c4.xyz,RC.mat.c3.xyz*RC.et*100)
       end
    end
+
    if not H then return end
       local true_cam_dir = math.lerp(Camera.ldir,Camera.dir,dt):add(0,0.5,0)*Camera.dist
       if player:isLoaded() then
@@ -371,10 +373,18 @@ events.POST_WORLD_RENDER:register(function (dt)
          end
       end
 
-      renderer:setFOV(math.lerp(1,throttle_time/RC.a_sfw + 1,Camera.transition))
-      vanilla_model.RIGHT_ARM:setVisible(not Camera.mode)
-      vanilla_model.RIGHT_ITEM:setVisible(not Camera.mode)
-      vanilla_model.RIGHT_SLEEVE:setVisible(not Camera.mode)
+      renderer:setFOV(math.lerp(1,th_pow/RC.a_sfw + 1,Camera.transition))
 end)
+
+events.RENDER:register(function (delta, context)
+   local hide = (context ~= "FIRST_PERSON" or not RC.engine)
+   vanilla_model.RIGHT_ARM:setVisible(hide)
+   vanilla_model.RIGHT_ITEM:setVisible(hide)
+   vanilla_model.RIGHT_SLEEVE:setVisible(hide)
+   vanilla_model.LEFT_ARM:setVisible(hide)
+   vanilla_model.LEFT_ITEM:setVisible(hide)
+   vanilla_model.LEFT_SLEEVE:setVisible(hide)
+end)
+
 
 return RC
