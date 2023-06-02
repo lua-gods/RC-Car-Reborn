@@ -18,7 +18,7 @@ local Parts = {
    },
 }
 
-models.RCcar.root.Base.Doll:setPrimaryTexture("SKIN")
+
 local Input = {
    Start    = keybinds:newKeybind("Start RC Car","key.keyboard.grave.accent"),
    Jump    = keybinds:newKeybind("Jump","key.keyboard.space"),
@@ -99,6 +99,24 @@ end
 Parts.root:setParentType("World")
 local jump_power = 0
 Camera.transition_duration = Camera.transition_duration / 10
+
+local age = 0
+
+events.ENTITY_INIT:register(function ()
+   RC.pos = player:getPos():add(0,1,0)
+   local slim_jim = player:getModelType() =="SLIM"
+   models.RCcar.root.Base.Doll.B.LA.LASlim:setVisible(slim_jim)
+   models.RCcar.root.Base.Doll.B.RA.RASlim:setVisible(slim_jim)
+   models.RCcar.root.Base.Doll.B.LA.LANormal:setVisible(not slim_jim)
+   models.RCcar.root.Base.Doll.B.RA.RANormal:setVisible(not slim_jim)
+end)
+
+events.TICK:register(function ()
+   models.RCcar.root.Base.Doll:setPrimaryTexture("SKIN")
+   if age > 30 then
+      events.TICK:remove("skin_applier")
+   end
+end,"skin_applier")
 -->====================[ Input ]====================<--
 
 Input.Start.press = function ()
@@ -151,13 +169,12 @@ events.TICK:register(function ()
       th_pow = math.max(th_pow - 0.1,0)
    end
    RC.str = math.lerp(RC.str,RC.ctrl.x * -25,0.4) / math.clamp(math.abs(RC.et)+0.4,0.9,10)
+   age = age + 1
 end)
 
 -->====================[ Physics ]====================<--
 
-events.ENTITY_INIT:register(function ()
-   RC.pos = player:getPos():add(0,1,0)
-end)
+
 
 local function getStepHeight(pos)
    local spos = pos:copy()
@@ -352,7 +369,7 @@ events.POST_WORLD_RENDER:register(function (dt)
    local true_steer = -math.lerp(RC.lstr,RC.str,dt)
    local true_sus = math.lerp(RC.ls,RC.s,dt)
    local true_rot = math.lerp(RC.lrot,RC.rot,dt)
-   --renderer:setCameraPivot(true_pos:copy():add(0,0.5,0))
+   local true_locvel = math.lerp(RC.loc_lvel,RC.loc_vel,dt)
    Parts.root:setPos(true_pos * 16):setRot((true_vel.y-Physics.gravity)*-math.sign(math.floor(RC.loc_vel.z*100+0.5)/100)*90,true_rot,0)
    Parts.base:setPos(0,true_sus.y,0):setRot(math.deg(true_sus.z)*0.3,0,math.deg(true_sus.x))
    for _, wheelData in pairs(Parts.steer_wheels) do
@@ -390,12 +407,16 @@ events.POST_WORLD_RENDER:register(function (dt)
             local transition = -(math.cos(math.pi * Camera.transition) - 1) / 2
             if renderer:isFirstPerson() then
                renderer:setCameraPivot(math.lerp(hpos,true_pos:add(0,0.45,0),transition))
-               renderer:setCameraRot(crot.x,math.lerp(crot.y,crot.y-true_rot,transition),0)
+               renderer:setCameraRot(crot.x,math.lerp(crot.y,crot.y-true_rot,transition),math.deg(true_locvel.x)*.3)
                models.RCcar.root.Base.Doll.B.H:setVisible(transition < 0.95)
             else
                models.RCcar.root.Base.Doll.B.H:setVisible(true)
                renderer:setCameraPivot(math.lerp(hpos,true_pos:add(0,0.4,0),transition))
-               renderer:setCameraRot(crot.x,math.lerp(crot.y, math.deg(math.atan2(true_cam_dir.z,true_cam_dir.x))+90,transition),0)
+               if renderer:isCameraBackwards() then
+                  renderer:setCameraRot(crot.x,math.lerp(crot.y, math.deg(math.atan2(true_cam_dir.z,true_cam_dir.x))+90+180,transition),0)
+               else
+                  renderer:setCameraRot(crot.x,math.lerp(crot.y, math.deg(math.atan2(true_cam_dir.z,true_cam_dir.x))+90,transition),0)
+               end
             end
          end
       end
@@ -404,7 +425,7 @@ end)
 
 local lprot = vectors.vec2()
 events.POST_RENDER:register(function (x,y)
-   if not player:isLoaded() then return end
+   if not player:isLoaded() and not H then return end
    local prot = player:getRot()
    local d = lprot-prot
    lprot = prot
