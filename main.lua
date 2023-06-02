@@ -21,6 +21,7 @@ local Parts = {
 
 local Input = {
    Start    = keybinds:newKeybind("Start RC Car","key.keyboard.grave.accent"),
+   Honk    = keybinds:newKeybind("Car Horn","key.keyboard.f"),
    Jump    = keybinds:newKeybind("Jump","key.keyboard.space"),
    Forward  = keybinds:newKeybind("Throttle Forward","key.keyboard.w"),
    Backward = keybinds:newKeybind("Throttle Backward","key.keyboard.s"),
@@ -135,6 +136,14 @@ Input.Start.press = function ()
    return true
 end
 
+local honk_cooldown = 0
+Input.Honk.press = function ()
+   if honk_cooldown >= 0 then
+      honk_cooldown = 10
+      pings.honk()
+   end
+end
+
 Input.Jump.press = function () jump_power = 0 return RC.engine end
 Input.Jump.release = function () if RC.engine and RC.is_on_floor then pings.jump(math.lerp(RC.hj,RC.lj,jump_power / RC.hjw)) jump_power = 0 end return RC.engine end
 Input.Forward.press = function () if RC.engine then pings.syncControlThrottle(RC.ctrl.y + 1) end return RC.engine end
@@ -170,6 +179,10 @@ events.TICK:register(function ()
    end
    RC.str = math.lerp(RC.str,RC.ctrl.x * -25,0.4) / math.clamp(math.abs(RC.et)+0.4,0.9,10)
    age = age + 1
+
+   if honk_cooldown > 0 then
+      honk_cooldown = honk_cooldown - 1
+   end
 end)
 
 -->====================[ Physics ]====================<--
@@ -349,6 +362,11 @@ function pings.syncState(x,y,z,r)
    if H then return end
    RC.pos = vectors.vec3(x,y,z)
    RC.rot = r
+end
+
+function pings.honk()
+   sounds:playSound("honk",RC.pos,1,1)
+   animations.RCcar.honk:stop():play()
 end
 
 -->====================[ Rendering ]====================<--
