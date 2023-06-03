@@ -65,9 +65,9 @@ local RC = {
    a_sfw = 5*10,             -- Faster Speed Wait
    a_f = 0.8,                -- Friction
    jump_height = 0.3,        -- jump height
-   g = Physics.gravity,      -- gravity used by the car
-   ng = -0.07,               -- gravity
-   wg = -0.03,               -- gravity
+   g = -0.07,      -- gravity used by the car
+   ng = -0.07,               -- normal gravity
+   jg = -0.03,               -- jump gravity
    -->==========[ States ]==========<--
    is_in_liquid = false,     -- is the car inside liquid
    is_on_floor = false,      -- is on the floor
@@ -80,8 +80,8 @@ local RC = {
 }
 -->====================[ Camera Properties ]====================<--
 local Camera = {
-   ldir = vectors.vec3(),
-   dir = vectors.vec3(),
+   ldir = vectors.vec2(),
+   dir = vectors.vec2(),
    mode = false,
    transition = 0,
    dist = 3,
@@ -257,8 +257,6 @@ events.TICK:register(function ()
    do
       RC.pos.y = RC.pos.y + RC.vel.y
       local result = collision(RC.pos,RC.vel.y,2)
-      if result then RC.pos.y = result RC.vel:mul(RC.a_f,0,RC.a_f) RC.is_on_floor = true else RC.is_on_floor = false end
-      RC.vel.y = RC.vel.y + RC.g
       local block = world.getBlockState(RC.pos:add(0,-0.01,0))
       if block:hasCollision() then
          RC.floor_block = block
@@ -266,6 +264,8 @@ events.TICK:register(function ()
       else
          RC.floor_block = nil
       end
+      if result and block:hasCollision() then RC.pos.y = result RC.vel:mul(RC.a_f,0,RC.a_f) RC.is_on_floor = true else RC.is_on_floor = false end
+      RC.vel.y = RC.vel.y + RC.g
       RC.pos:add(0,0.01,0)
    end
 
@@ -361,11 +361,11 @@ end
 
 function pings.jump()
    RC.vel.y = RC.jump_height
-   RC.g = Physics.jump_gravity
+   RC.g = RC.jg
 end
 
 function pings.unjump()
-   RC.g = Physics.gravity
+   RC.g = RC.ng
 end
 
 function pings.syncState(x,y,z,r)
@@ -397,8 +397,7 @@ events.POST_WORLD_RENDER:register(function (dt)
    local true_steer = -math.lerp(RC.lstr,RC.str,dt)
    local true_sus = math.lerp(RC.ls,RC.s,dt)
    local true_rot = math.lerp(RC.lrot,RC.rot,dt)
-   local true_locvel = math.lerp(RC.loc_lvel,RC.loc_vel,dt)
-   Parts.root:setPos(true_pos * 16):setRot((true_vel.y-Physics.gravity)*-math.sign(math.floor(RC.loc_vel.z*100+0.5)/100)*90,true_rot,0)
+   Parts.root:setPos(true_pos * 16):setRot((true_vel.y-RC.g)*-math.sign(math.floor(RC.loc_vel.z*100+0.5)/100)*90,true_rot,0)
    Parts.base:setPos(0,true_sus.y,0):setRot(math.deg(true_sus.z)*0.3,0,math.deg(true_sus.x))
    for _, wheelData in pairs(Parts.steer_wheels) do
       wheelData[2]:setRot(math.deg(true_dist_trav)*wheelData[1],true_steer)
@@ -420,7 +419,8 @@ events.POST_WORLD_RENDER:register(function (dt)
       if not player:isLoaded() then return end
       local crot = player:getRot()
       crot.y = (crot.y) % 360 -- <=== El stupido
-      local true_cam_dir = math.lerp(Camera.ldir,Camera.dir,dt):add(0,0.5,0)*Camera.dist
+      local true_cam_dir = math.lerp(Camera.ldir,Camera.dir,dt)
+      true_cam_dir = vectors.vec3(true_cam_dir.x,0.5,true_cam_dir.y):add(0,0.5,0)*Camera.dist
       if player:isLoaded() then
          local hpos = player:getPos(dt):add(0,player:getEyeHeight(),0)
          if Camera.mode then
@@ -463,7 +463,7 @@ events.POST_RENDER:register(function (x,y)
    local d = lprot-prot
    lprot = prot
    if not renderer:isFirstPerson() and RC.engine then
-      Camera.dir = vectors.rotateAroundAxis(d.y,Camera.dir,vectors.vec3(0,1,0))
+      Camera.dir = vectors.rotateAroundAxis(d.y,vectors.vec3(Camera.dir.x,0,Camera.dir.y),vectors.vec3(0,1,0)).xz
    end
 end)
 
