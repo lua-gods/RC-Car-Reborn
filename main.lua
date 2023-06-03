@@ -18,7 +18,7 @@ local Parts = {
    },
 }
 
-
+-->====================[ Input Map ]====================<--
 local Input = {
    Start    = keybinds:newKeybind("Start RC Car","key.keyboard.grave.accent"),
    Honk    = keybinds:newKeybind("Car Horn","key.keyboard.f"),
@@ -30,55 +30,58 @@ local Input = {
 }
 
 local Physics = {
-   gravity = -0.07,
-   jump_gravity = -0.03,
    margin = 0.001,
 }
 local RC = {
    -->==========[ Generic ]==========<--
-   lpos = vectors.vec3(),
-   pos = vectors.vec3(),
+   lpos = vectors.vec3(),    -- Last Tick Position
+   pos = vectors.vec3(),     -- Position
    
-   lvel = vectors.vec3(),
-   vel = vectors.vec3(),
+   lvel = vectors.vec3(),    -- Last Tick Velocity
+   vel = vectors.vec3(),     -- Velocity
 
-   loc_vel = vectors.vec3(),
-   loc_lvel = vectors.vec3(),
+   loc_lvel = vectors.vec3(),-- Last Tick Local Velocity
+   loc_vel = vectors.vec3(), -- Local Velocity
    
-   lrot = 0,
-   rot = 0,
-   rvel = 0,
+   lrot = 0,                 -- Last Tick Rotation
+   rot = 0,                  -- Rotation
+   rvel = 0,                 -- Angular Velocity
    
    -->==========[ Suspension ]==========<--
-   ls = vectors.vec3(),   -- Last Tick Suspension
-   s = vectors.vec3(),    -- Suspension
-   sv = vectors.vec3(),   -- Suspension Velocity
+   ls = vectors.vec3(),      -- Last Tick Suspension
+   s = vectors.vec3(),       -- Suspension
+   sv = vectors.vec3(),      -- Suspension Velocity
    
    -->==========[ RC car specific ]==========<--
-   engine = false,        -- Is Engine Running
-   et = 0,                -- Engine Throttle
-   lstr = 0,              -- Steer
-   str = 0,               -- Steer
-   ctrl = vectors.vec2(), -- Control Vec
+   engine = false,           -- Is Engine Running
+   et = 0,                   -- Engine Throttle
+   lstr = 0,                 -- Last Tick Steer
+   str = 0,                  -- Steer
+   ctrl = vectors.vec2(),    -- Control Vec
    -->==========[ Attributes ]==========<--
    mat = matrices.mat4(),
-   a_s = 0.4,             -- Speed
-   a_sf = 1.2,            -- Faster Speed
-   a_sfw = 5*10,          -- Faster Speed Wait
-   a_f = 0.8,             -- Friction
-   is_on_floor = false,   -- is on the floor
-   floor_block = nil,     -- the block the car is on, nil if air or transparent
-   ltr = 0,               -- last throttle distance
-   tr = 0,                -- throttle distance
-   g = Physics.gravity,   -- gravity
-   ldistance_traveled = 0,-- last distance traveled
-   distance_traveled = 0, -- distance traveled
-   jump_height = 0.3,     -- jump height
+   a_s = 0.4,                -- Speed
+   a_sf = 2,                 -- Faster Speed
+   a_sfw = 5*10,             -- Faster Speed Wait
+   a_f = 0.8,                -- Friction
+   jump_height = 0.3,        -- jump height
+   g = Physics.gravity,      -- gravity used by the car
+   ng = -0.07,               -- gravity
+   wg = -0.03,               -- gravity
+   -->==========[ States ]==========<--
+   is_in_liquid = false,     -- is the car inside liquid
+   is_on_floor = false,      -- is on the floor
+   floor_block = nil,        -- the block the car is on, nil if air or transparent
+   -->==========[ Statistics ]==========<--
+   ltr = 0,                  -- last throttle distance
+   tr = 0,                   -- throttle distance
+   ldistance_traveled = 0,   -- last distance traveled
+   distance_traveled = 0,    -- distance traveled
 }
-
+-->====================[ Camera Properties ]====================<--
 local Camera = {
-   ldir = vectors.vec3(0,0,-1),
-   dir = vectors.vec3(0,0,-1),
+   ldir = vectors.vec3(),
+   dir = vectors.vec3(),
    mode = false,
    transition = 0,
    dist = 3,
@@ -127,7 +130,7 @@ Input.Start.press = function ()
       pings.syncControlSteer(0)
       pings.syncControlThrottle(0)
       if player:isLoaded() then
-         Camera.dir = RC.mat.c3.xyz
+         Camera.dir = RC.mat.c3.xz
       end
       host:setActionbar('[{"text":"Remote Controll Mode: "},{"text":"Enabled","color":"green"}]')
    else
@@ -237,13 +240,12 @@ local function collision(pos,vel,axis)
       end
    end
 end
---local engine_sound = sounds:playSound("numero_dos",RC.pos,1,0,true):play()
+--local engine_sound = sounds:playSound("engine",RC.pos,1,0,true):play()
 events.TICK:register(function ()
    --Camera.lcam_dist = Camera.cam_dist
    --local cdist = (RC.pos-client:getCameraPos()):length()
    --Camera.cam_dist = cdist
    --Camera.doppler = math.clamp(Camera.lcam_dist-Camera.cam_dist,-0.9,0.9) * 0.3 +1
-   --sounds:playSound("minecraft:block.piston.contract",RC.pos,0.1,0.5)
    --local e = math.abs(RC.et)
    --print(Camera.doppler)
    --engine_sound:setPos(RC.pos):setPitch((e*0.8+0.8) * Camera.doppler):setVolume(math.clamp((math.clamp(e*8,0.0,1)/cdist^2)*5,0,0.1))
@@ -329,7 +331,7 @@ events.TICK:register(function ()
 
    if not H then return end
    Camera.ldir = Camera.dir:copy()
-   Camera.dir = (Camera.dir - (RC.pos - RC.lpos) / Camera.dist):normalized()
+   Camera.dir = (Camera.dir - (RC.pos - RC.lpos).xz / Camera.dist):normalized()
 end)
 
 -->====================[ Networking ]====================<--
