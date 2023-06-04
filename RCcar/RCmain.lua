@@ -531,7 +531,7 @@ events.TICK:register(function ()
    sync_timer = sync_timer - 1
    if sync_timer < 0 then
       sync_timer = 20
-      pings.syncState(snap(RC.pos.x,10),snap(RC.pos.y,10),snap(RC.pos.z,100),snap(RC.rot,10))
+      pings.syncState(snap(RC.pos.x,100),snap(RC.pos.y,100),snap(RC.pos.z,100),snap(RC.rot,100))
    end
 end)
 
