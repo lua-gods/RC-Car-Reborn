@@ -74,8 +74,8 @@ local RC = {
    -->==========[ Statistics ]==========<--
    ltr = 0,                  -- last throttle distance
    tr = 0,                   -- throttle distance
-   ldistance_traveled = 0,   -- last distance traveled
-   distance_traveled = 0,    -- distance traveled
+   ldt = 0,   -- last distance traveled
+   dt = 0,    -- distance traveled
 }
 -->====================[ Camera Properties ]====================<--
 local Camera = {
@@ -184,63 +184,118 @@ function API:getCarProperties()
    return RC
 end
 
-function API:getSteer(delta)
-   if not delta then delta = 0 end
-   return math.lerp(RC.lstr,RC.str,delta)
-end
-
+---Returns the RC car position in world coordinates.
+---@param delta number?
+---@return Vector3
 function API:getPos(delta)
    if not delta then delta = 0 end
    return math.lerp(RC.lpos,RC.pos,delta)
 end
 
+---Returns the RC car rotation, note that the car only has one dimensional axis(the Y axis, up to down)
+---@param delta number?
+---@return number
 function API:getRot(delta)
    if not delta then delta = 0 end
    return math.lerp(RC.lrot,RC.rot,delta)
 end
 
+---Returns the RC car velocity in global coordinates
+---@param delta number?
+---@return Vector3
 function API:getVel(delta)
    if not delta then delta = 0 end
    return math.lerp(RC.lvel,RC.vel,delta)
 end
 
+---Returns the steer, in degrees
+---@param delta number?
+---@return number
 function API:getSteer(delta)
    if not delta then delta = 0 end
    return math.lerp(RC.lstr,RC.str,delta)
 end
 
+---Returns the RC car control vector
+---***
+---X = Left to Right
+---Y = Forward to Backward
+---@return Vector2
+function API:getControlVector()
+   return RC.ctrl
+end
+
+---Returns the local Velocity of the RC car.
+---***
+---X for Left-Right  
+---Y for UP-Down  
+---Z for Backward-Forward  
+---@param delta number?
+---@return Vector3
 function API:getLocalVel(delta)
    if not delta then delta = 0 end
    return math.lerp(RC.loc_lvel,RC.loc_vel,delta)
 end
 
+---Returns the Engine wheel distance traveled, not the movement distance traveled
+---@param delta number?
+---@return number
+function API:getDistanceTraveled(delta)
+   if not delta then delta = 0 end
+   return math.lerp(RC.ldt,RC.dt,delta)
+end
+
+---Returns the Engine wheel distance traveled, not the movement distance traveled
+---@param delta number?
+---@return number
 function API:getThrottleDistance(delta)
    if not delta then delta = 0 end
    return math.lerp(RC.ltr,RC.tr,delta)
 end
 
+---Returns true if the RC car can be controlled
+---@return boolean
 function API:isActive()
    return RC.engine
 end
 
+---Returns the Engine Throttle Speed.  
+--- Backwards -1 <-0-> +1 Forward
+---@return number
 function API:getEngineSpeed()
    return RC.et
 end
 
+---Gets the Suspension state  
+---***
+--- X suspension Left to Right  
+--- Y suspension Down to Up  
+--- Z suspension Back to Front  
+---@param delta number?
+---@return Vector3
 function API:getSuspension(delta)
    if not delta then delta = 0 end
    return math.lerp(RC.ls,RC.s,delta)
 end
 
+---Returns the Camera Direction, the 3rd person camera
+---@param delta number?
+---@return Vector2
 function API:getCameraDir(delta)
    if not delta then delta = 0 end
    return math.lerp(Camera.ldir,Camera.dir,delta)
 end
 
+---Returns true if the car is on the ground
+---@return boolean
 function API:isOnGround()
    return RC.is_on_floor
 end
 
+---Returns a number ranging from 0 to 1
+---***
+--- Player Camera 0 <---> 1 RC Car Camera
+---@return number
 function API:getCameraTransition()
    return Camera.transition
 end
@@ -382,8 +437,8 @@ events.TICK:register(function ()
       RC.lvel.y - RC.vel.y,
       RC.loc_vel.z-RC.loc_lvel.z) * 2 - RC.s * 0.9
    RC.rot = RC.rot + RC.str * RC.loc_vel.z
-   RC.ldistance_traveled = RC.distance_traveled
-   RC.distance_traveled = RC.distance_traveled + RC.loc_vel.z
+   RC.ldt = RC.dt
+   RC.dt = RC.dt + RC.loc_vel.z
 
    if math.abs(RC.loc_vel.z) > 0.1 then
       if RC.floor_block then
@@ -438,7 +493,7 @@ end
 
 function pings.honk()
    sounds:playSound("honk",RC.pos,1,1)
-   animations.RCcar.honk:stop():play()
+   animations["RCcar.model"].honk:stop():play()
 end
 
 -->====================[ Rendering ]====================<--
@@ -454,7 +509,7 @@ end)
 events.POST_WORLD_RENDER:register(function (dt)
    local true_pos = math.lerp(RC.lpos,RC.pos,dt)
    local true_vel = math.lerp(RC.lvel,RC.vel,dt)
-   local true_dist_trav = math.lerp(RC.ldistance_traveled,RC.distance_traveled,dt)
+   local true_dist_trav = math.lerp(RC.ldt,RC.dt,dt)
    local throttle_trav = -math.lerp(RC.ltr,RC.tr,dt)
    local true_steer = -math.lerp(RC.lstr,RC.str,dt)
    local true_sus = math.lerp(RC.ls,RC.s,dt)

@@ -24,6 +24,5 @@ events.WORLD_RENDER:register(function (delta)
    models.RCcar.model.root.Base.Doll.B.RA:setRot(60+true_steer,5+(true_steer*true_steer)*0.01,0)
    models.RCcar.model.root.Base.SteeringWheel.Hinge:setRot(0,true_steer,0)
    models.RCcar.model.root.Base.Doll.B:setRot(0,0,true_steer*0.1)
-
-   models.RCcar.model.root.Base.Doll.B.H:setVisible(RC:getCameraTransition() < 0.95)
+   models.RCcar.model.root.Base.Doll.B.H:setVisible(RC:getCameraTransition() < 0.90 and not renderer:isFirstPerson())
 end)
