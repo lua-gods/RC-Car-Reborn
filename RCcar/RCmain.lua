@@ -6,15 +6,15 @@
 
 H = host:isHost()
 local Parts = {
-   root = models.RCcar.root,
-   base = models.RCcar.root.Base,
+   root = models.RCcar.model.root,
+   base = models.RCcar.model.root.Base,
    steer_wheels = {
-      {4,models.RCcar.root.Wheel.FL},
-      {4,models.RCcar.root.Wheel.FR},
+      {4,models.RCcar.model.root.Wheel.FL},
+      {4,models.RCcar.model.root.Wheel.FR},
    },
    engine_wheels = {
-      {5,models.RCcar.root.Wheel.BL},
-      {5,models.RCcar.root.Wheel.BR},
+      {5,models.RCcar.model.root.Wheel.BL},
+      {5,models.RCcar.model.root.Wheel.BR},
    },
 }
 
@@ -69,7 +69,6 @@ local RC = {
    ng = -0.07,               -- normal gravity
    jg = -0.03,               -- jump gravity
    -->==========[ States ]==========<--
-   is_in_liquid = false,     -- is the car inside liquid
    is_on_floor = false,      -- is on the floor
    floor_block = nil,        -- the block the car is on, nil if air or transparent
    -->==========[ Statistics ]==========<--
@@ -104,23 +103,7 @@ Parts.root:setParentType("World")
 local jump_power = 0
 Camera.transition_duration = Camera.transition_duration / 10
 
-local age = 0
 
-events.ENTITY_INIT:register(function ()
-   RC.pos = player:getPos():add(0,1,0)
-   local slim_jim = player:getModelType() =="SLIM"
-   models.RCcar.root.Base.Doll.B.LA.LASlim:setVisible(slim_jim)
-   models.RCcar.root.Base.Doll.B.RA.RASlim:setVisible(slim_jim)
-   models.RCcar.root.Base.Doll.B.LA.LANormal:setVisible(not slim_jim)
-   models.RCcar.root.Base.Doll.B.RA.RANormal:setVisible(not slim_jim)
-end)
-
-events.TICK:register(function ()
-   models.RCcar.root.Base.Doll:setPrimaryTexture("SKIN")
-   if age > 30 then
-      events.TICK:remove("skin_applier")
-   end
-end,"skin_applier")
 -->====================[ Input ]====================<--
 
 Input.Start.press = function ()
@@ -147,8 +130,8 @@ Input.Honk.press = function ()
    end
 end
 
-Input.Jump.press = function () if RC.engine and RC.is_on_floor then pings.jump() end return RC.engine end
-Input.Jump.release = function () if RC.engine then pings.unjump() end end
+Input.Jump.press = function () if RC.engine and RC.is_on_floor then pings.GNRCCARjump() end return RC.engine end
+Input.Jump.release = function () if RC.engine then pings.GNRCCARunjump() end end
 Input.Forward.press = function () if RC.engine then pings.syncControlThrottle(RC.ctrl.y + 1) end return RC.engine end
 Input.Forward.release = function () if RC.engine then pings.syncControlThrottle(RC.ctrl.y - 1) end return RC.engine end
 
@@ -161,6 +144,10 @@ Input.Left.release = function () if RC.engine then pings.syncControlSteer(RC.ctr
 Input.Right.press = function () if RC.engine then pings.syncControlSteer(RC.ctrl.x - 1) end return RC.engine end
 Input.Right.release = function () if RC.engine then pings.syncControlSteer(RC.ctrl.x + 1) end return RC.engine end
 
+
+events.ENTITY_INIT:register(function ()
+   RC.pos = player:getPos():add(0,1,0)
+end)
 
 local th_pow = 0
 events.TICK:register(function ()
@@ -176,12 +163,87 @@ events.TICK:register(function ()
       th_pow = math.max(th_pow - 0.1,0)
    end
    RC.str = math.lerp(RC.str,RC.ctrl.x * -25,0.4) / math.clamp(math.abs(RC.et)+0.4,0.9,10)
-   age = age + 1
 
    if honk_cooldown > 0 then
       honk_cooldown = honk_cooldown - 1
    end
 end)
+
+-->====================[ API ]====================<--
+local API = {}
+
+---Returns the keybind inputs of the car
+---@return table
+function API:getKeybinds()
+   return Input
+end
+
+---Returns the table containing all the RC car's data
+---@return table
+function API:getCarProperties()
+   return RC
+end
+
+function API:getSteer(delta)
+   if not delta then delta = 0 end
+   return math.lerp(RC.lstr,RC.str,delta)
+end
+
+function API:getPos(delta)
+   if not delta then delta = 0 end
+   return math.lerp(RC.lpos,RC.pos,delta)
+end
+
+function API:getRot(delta)
+   if not delta then delta = 0 end
+   return math.lerp(RC.lrot,RC.rot,delta)
+end
+
+function API:getVel(delta)
+   if not delta then delta = 0 end
+   return math.lerp(RC.lvel,RC.vel,delta)
+end
+
+function API:getSteer(delta)
+   if not delta then delta = 0 end
+   return math.lerp(RC.lstr,RC.str,delta)
+end
+
+function API:getLocalVel(delta)
+   if not delta then delta = 0 end
+   return math.lerp(RC.loc_lvel,RC.loc_vel,delta)
+end
+
+function API:getThrottleDistance(delta)
+   if not delta then delta = 0 end
+   return math.lerp(RC.ltr,RC.tr,delta)
+end
+
+function API:isActive()
+   return RC.engine
+end
+
+function API:getEngineSpeed()
+   return RC.et
+end
+
+function API:getSuspension(delta)
+   if not delta then delta = 0 end
+   return math.lerp(RC.ls,RC.s,delta)
+end
+
+function API:getCameraDir(delta)
+   if not delta then delta = 0 end
+   return math.lerp(Camera.ldir,Camera.dir,delta)
+end
+
+function API:isOnGround()
+   return RC.is_on_floor
+end
+
+function API:getCameraTransition()
+   return Camera.transition
+end
 
 -->====================[ Physics ]====================<--
 
@@ -359,12 +421,12 @@ function pings.syncControlSteer(Y)
    RC.ctrl.x = Y
 end
 
-function pings.jump()
+function pings.GNRCCARjump()
    RC.vel.y = RC.jump_height
    RC.g = RC.jg
 end
 
-function pings.unjump()
+function pings.GNRCCARunjump()
    RC.g = RC.ng
 end
 
@@ -409,12 +471,6 @@ events.POST_WORLD_RENDER:register(function (dt)
       end
    end
 
-   -->==========[ Doll Procedural Animation ]==========<--
-   models.RCcar.root.Base.Doll.B.LA:setRot(60-true_steer,-(true_steer*true_steer)*0.01-5,0)
-   models.RCcar.root.Base.Doll.B.RA:setRot(60+true_steer,5+(true_steer*true_steer)*0.01,0)
-   models.RCcar.root.Base.SteeringWheel.Hinge:setRot(0,true_steer,0)
-   models.RCcar.root.Base.Doll.B:setRot(0,0,true_steer*0.1)
-
    if not H then return end
       if not player:isLoaded() then return end
       local crot = player:getRot()
@@ -441,9 +497,8 @@ events.POST_WORLD_RENDER:register(function (dt)
                   shake = vectors.vec2(intensity*(math.random()-.5),intensity*(math.random()-.5))
                end
                renderer:setCameraRot(crot.x+shake.x,math.lerp(crot.y,(crot.y-true_rot)%360,transition),math.deg(true_sus.x)*.3+shake.y)
-               models.RCcar.root.Base.Doll.B.H:setVisible(transition < 0.95)
+               
             else
-               models.RCcar.root.Base.Doll.B.H:setVisible(true)
                renderer:setCameraPivot(math.lerp(hpos,true_pos:add(0,0.4,0),transition))
                if renderer:isCameraBackwards() then
                   renderer:setCameraRot(crot.x,math.lerp(crot.y, math.deg(math.atan2(true_cam_dir.z,true_cam_dir.x))+90+180,transition),0)
@@ -478,4 +533,4 @@ events.RENDER:register(function (delta, context)
 end)
 
 
-return RC
+return API
