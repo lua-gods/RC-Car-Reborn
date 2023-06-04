@@ -1,5 +1,5 @@
 {
-    "authors":["GNamimates","§fTexture by: §eKiri","§fVersion:§r 0.2"],
-    "color":"#4dd966",
+    "authors":["GNamimates","§fTexture by: §rKiri","§fVersion:§r 0.2.1","§f§nLibraries","KitCat Events API"],
+    "color":"#ff2020",
     "description":"Remote Control Car"
 }

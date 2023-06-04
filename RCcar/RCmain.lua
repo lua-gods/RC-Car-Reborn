@@ -5,6 +5,7 @@
 \____/_/ |_/\__,_/_/ /_/ /_/_/_/ /_/ /_/\__,_/\__/\___/____]]
 
 H = host:isHost()
+local katt = require("RCcar.KattEventsAPI")
 local Parts = {
    root = models.RCcar.model.root,
    base = models.RCcar.model.root.Base,
@@ -31,6 +32,12 @@ local Input = {
 
 local Physics = {
    margin = 0.001,
+   force_solid = {
+      "minecraft:soul_sand",
+      "minecraft:mud",
+      "minecraft:chest",
+      "minecraft:ender_chest"
+   },
 }
 local RC = {
    -->==========[ Generic ]==========<--
@@ -65,12 +72,16 @@ local RC = {
    a_sfw = 5*10,             -- Faster Speed Wait
    a_f = 0.8,                -- Friction
    jump_height = 0.3,        -- jump height
-   g = -0.07,      -- gravity used by the car
+   g = -0.07,                -- gravity used by the car
+   wjg = 0.2,               -- normal gravity
    ng = -0.07,               -- normal gravity
    jg = -0.03,               -- jump gravity
    -->==========[ States ]==========<--
+   is_underwater = false,
    is_on_floor = false,      -- is on the floor
    floor_block = nil,        -- the block the car is on, nil if air or transparent
+   block_inside = nil,
+   is_jumping = false,
    -->==========[ Statistics ]==========<--
    ltr = 0,                  -- last throttle distance
    tr = 0,                   -- throttle distance
@@ -130,7 +141,7 @@ Input.Honk.press = function ()
    end
 end
 
-Input.Jump.press = function () if RC.engine and RC.is_on_floor then pings.GNRCCARjump() end return RC.engine end
+Input.Jump.press = function () if RC.engine and RC.is_on_floor or RC.is_underwater then pings.GNRCCARjump(RC.is_underwater) end return RC.engine end
 Input.Jump.release = function () if RC.engine then pings.GNRCCARunjump() end end
 Input.Forward.press = function () if RC.engine then pings.syncControlThrottle(RC.ctrl.y + 1) end return RC.engine end
 Input.Forward.release = function () if RC.engine then pings.syncControlThrottle(RC.ctrl.y - 1) end return RC.engine end
@@ -170,7 +181,9 @@ events.TICK:register(function ()
 end)
 
 -->====================[ API ]====================<--
-local API = {}
+local API = {ON_JUMP = katt.newEvent(),
+ON_UNJUMP = katt.newEvent(),
+ON_HORN = katt.newEvent(),}
 
 ---Returns the keybind inputs of the car
 ---@return table
@@ -214,6 +227,18 @@ end
 function API:getSteer(delta)
    if not delta then delta = 0 end
    return math.lerp(RC.lstr,RC.str,delta)
+end
+
+---Returns the block the car is on
+---@return BlockState|nil
+function API:getFloorBlock()
+   return RC.floor_block
+end
+
+---Returns the block the car is in
+---@return BlockState|nil
+function API:getBlockInside()
+   return RC.block_inside
 end
 
 ---Returns the RC car control vector
@@ -302,15 +327,25 @@ end
 
 -->====================[ Physics ]====================<--
 
-
-
 local function getStepHeight(pos)
    local spos = pos:copy()
    local step_height = 0
    for i = 1, 10, 1 do
+      local force_solid = false
       local block, brpos = world.getBlockState(spos), spos % 1
+      for _, namespace in pairs(Physics.force_solid) do
+         if namespace == block.id then
+            force_solid = true
+         end
+      end
+      local collision = {}
+      if force_solid then
+         collision = {{vectors.vec3(0,0,0),vectors.vec3(1,1,1)}}
+      else
+         collision = block:getCollisionShape()
+      end
       local bpos = spos - brpos
-      for key, AABB in pairs(block:getCollisionShape()) do
+      for key, AABB in pairs(collision) do
          if AABB[1].x <= brpos.x and AABB[1].y <= brpos.y and AABB[1].z <= brpos.z
          and AABB[2].x >= brpos.x and AABB[2].y >= brpos.y and AABB[2].z >= brpos.z then
             brpos.y = AABB[2].y + Physics.margin
@@ -328,7 +363,19 @@ local function collision(pos,vel,axis)
    local block, brpos = world.getBlockState(pos), pos % 1
    local bpos = pos - brpos
    local collided = false
-   for key, AABB in pairs(block:getCollisionShape()) do
+   local force_solid = false
+   for _, namespace in pairs(Physics.force_solid) do
+      if namespace == block.id then
+         force_solid = true
+      end
+   end
+   local collision = {}
+   if force_solid then
+      collision = {{vectors.vec3(0,0,0),vectors.vec3(1,1,1)}}
+   else
+      collision = block:getCollisionShape()
+   end
+   for key, AABB in pairs(collision) do
       if AABB[1].x <= brpos.x and AABB[1].y <= brpos.y and AABB[1].z <= brpos.z
       and AABB[2].x >= brpos.x and AABB[2].y >= brpos.y and AABB[2].z >= brpos.z then
          collided = true
@@ -370,58 +417,68 @@ events.TICK:register(function ()
    RC.lvel = RC.vel:copy()
    RC.lrot = RC.rot
    RC.ltr = RC.tr
-
-   do
-      RC.pos.y = RC.pos.y + RC.vel.y
-      local result = collision(RC.pos,RC.vel.y,2)
-      local block = world.getBlockState(RC.pos:add(0,-0.01,0))
-      if block:hasCollision() then
-         RC.floor_block = block
-         RC.a_f = block:getFriction()
-      else
-         RC.floor_block = nil
-      end
-      if result and block:hasCollision() then RC.pos.y = result RC.vel:mul(RC.a_f,0,RC.a_f) RC.is_on_floor = true else RC.is_on_floor = false end
-      RC.vel.y = RC.vel.y + RC.g
-      RC.pos:add(0,0.01,0)
-   end
-
-   do
-      if RC.is_on_floor then
-         RC.vel.x = RC.vel.x * RC.a_f - RC.mat.c3.x * RC.et * (1-RC.a_f)
-      end
-      RC.pos.x = RC.pos.x + RC.vel.x
-      local result = collision(RC.pos,RC.vel.x,1)
-      if result then
-         local step_height = getStepHeight(RC.pos)
-         if step_height <= 1.1 then
-            RC.pos.y = RC.pos.y + step_height
+   local substeps = math.max(math.ceil(RC.vel:length()),1)
+   local ssr = 1/substeps
+   for _ = 1, substeps, 1 do
+      do
+         RC.pos.y = RC.pos.y + RC.vel.y * ssr
+         local result = collision(RC.pos,RC.vel.y,2)
+         local block = world.getBlockState(RC.pos:add(0,-0.01,0))
+         if block:hasCollision() then
+            RC.floor_block = block
+            RC.a_f = block:getFriction()
          else
-            RC.pos.x = result RC.vel:mul(0,RC.a_f,RC.a_f)
+            RC.floor_block = nil
          end
+         if RC.is_underwater then
+            RC.a_f = 0.9
+            RC.vel = RC.vel * 0.8 * ssr
+            RC.vel.y = RC.vel.y - RC.g * 0.9
+         end
+         local ssf = (RC.a_f-1) * ssr + 1
+         if result and block:hasCollision() then RC.pos.y = result RC.vel:mul(ssf,0,ssf) RC.is_on_floor = true else RC.is_on_floor = false end
+         RC.block_inside = world.getBlockState(RC.pos)
+         RC.is_underwater = (#RC.block_inside:getFluidTags() ~= 0)
+         if RC.block_inside.id == "minecraft:bubble_column" then
+            RC.vel.y = RC.vel.y + 0.1
+         end
+         RC.vel.y = RC.vel.y + RC.g * ssr
+         RC.pos:add(0,0.01,0)
       end
-   end
    
-   do
-      if RC.is_on_floor then
-         RC.vel.z = RC.vel.z * RC.a_f - RC.mat.c3.z * RC.et * (1-RC.a_f)
-      end
-      RC.pos.z = RC.pos.z + RC.vel.z
-      local result = collision(RC.pos,RC.vel.z,3)
-      if result then
-         local step_height = getStepHeight(RC.pos)
-         if step_height <= 1 then
-            RC.pos.y = RC.pos.y + step_height
-         else
-            RC.pos.z = result RC.vel:mul(RC.a_f,RC.a_f,0)
+      do
+         local ssf = (RC.a_f-1) * ssr + 1
+         if RC.is_on_floor or RC.is_underwater then
+            RC.vel.x = RC.vel.x * ssf - RC.mat.c3.x * RC.et * (1-ssf)
+         end
+         RC.pos.x = RC.pos.x + RC.vel.x * ssr
+         local result = collision(RC.pos,RC.vel.x,1)
+         if result then
+            local step_height = getStepHeight(RC.pos)
+            if step_height <= 1.1 then
+               RC.pos.y = RC.pos.y + step_height
+            else
+               RC.pos.x = result RC.vel:mul(0,ssf,ssf)
+            end
          end
       end
-   end
-
-   local block = world.getBlockState(RC.pos)
-   if block.id == "minecraft:water" then
-      RC.vel = RC.vel * 0.8
-      RC.vel.y = RC.vel.y + 0.04
+      
+      do
+         local ssf = (RC.a_f-1) * ssr + 1
+         if RC.is_on_floor or RC.is_underwater then
+            RC.vel.z = RC.vel.z * ssf - RC.mat.c3.z * RC.et * (1-ssf)
+         end
+         RC.pos.z = RC.pos.z + RC.vel.z * ssr
+         local result = collision(RC.pos,RC.vel.z,3)
+         if result then
+            local step_height = getStepHeight(RC.pos)
+            if step_height <= 1 then
+               RC.pos.y = RC.pos.y + step_height
+            else
+               RC.pos.z = result RC.vel:mul(ssf,ssf,0)
+            end
+         end
+      end
    end
 
    RC.tr = RC.tr + RC.et * 4
@@ -443,6 +500,16 @@ events.TICK:register(function ()
    if math.abs(RC.loc_vel.z) > 0.1 then
       if RC.floor_block then
          sounds:playSound(RC.floor_block:getSounds().step,RC.pos,0.3)
+      elseif RC.is_underwater then
+         sounds:playSound("minecraft:entity.player.swim",RC.pos,0.005)
+      end
+   end
+
+   if not RC.is_underwater and RC.g == RC.wjg then
+      if RC.is_jumping then
+         RC.g = RC.jg
+      else
+         RC.g = RC.ng
       end
    end
 
@@ -476,12 +543,20 @@ function pings.syncControlSteer(Y)
    RC.ctrl.x = Y
 end
 
-function pings.GNRCCARjump()
-   RC.vel.y = RC.jump_height
-   RC.g = RC.jg
+function pings.GNRCCARjump(underwater)
+   API.ON_JUMP:invoke()
+   RC.is_jumping = true
+   if RC.is_underwater then
+      RC.g = RC.wjg
+   else
+      RC.vel.y = RC.jump_height
+      RC.g = RC.jg
+   end
 end
 
 function pings.GNRCCARunjump()
+   API.ON_UNJUMP:invoke()
+   RC.is_jumping = false
    RC.g = RC.ng
 end
 
@@ -492,6 +567,7 @@ function pings.syncState(x,y,z,r)
 end
 
 function pings.honk()
+   API.ON_HORN:invoke()
    sounds:playSound("honk",RC.pos,1,1)
    animations["RCcar.model"].honk:stop():play()
 end
@@ -514,7 +590,7 @@ events.POST_WORLD_RENDER:register(function (dt)
    local true_steer = -math.lerp(RC.lstr,RC.str,dt)
    local true_sus = math.lerp(RC.ls,RC.s,dt)
    local true_rot = math.lerp(RC.lrot,RC.rot,dt)
-   Parts.root:setPos(true_pos * 16):setRot((true_vel.y-RC.g)*-math.sign(math.floor(RC.loc_vel.z*100+0.5)/100)*90,true_rot,0)
+   Parts.root:setPos(true_pos * 16):setRot((true_vel.y-RC.g)*-RC.loc_vel.z*90,true_rot,0)
    Parts.base:setPos(0,true_sus.y,0):setRot(math.deg(true_sus.z)*0.3,0,math.deg(true_sus.x))
    for _, wheelData in pairs(Parts.steer_wheels) do
       wheelData[2]:setRot(math.deg(true_dist_trav)*wheelData[1],true_steer)
@@ -523,6 +599,9 @@ events.POST_WORLD_RENDER:register(function (dt)
       wheelData[2]:setRot(math.deg(throttle_trav)*wheelData[1] / 4,0)
       if (math.abs(RC.et+RC.loc_vel.z / RC.a_f) > 0.2 or math.abs(RC.loc_vel.x) > 0.05) and RC.is_on_floor then
          particles:newParticle("minecraft:block "..RC.floor_block.id,wheelData[2]:partToWorldMatrix().c4.xyz,RC.mat.c3.xyz*RC.et*100)
+      end
+      if RC.is_underwater and math.abs(RC.et) > 0.2 then
+         particles:newParticle("minecraft:bubble_column_up",wheelData[2]:partToWorldMatrix().c4.xyz,RC.mat.c3.xyz*RC.et*3)
       end
    end
 

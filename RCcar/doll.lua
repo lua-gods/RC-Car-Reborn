@@ -19,7 +19,7 @@ events.TICK:register(function ()
 end,"skin_applier")
 
 events.WORLD_RENDER:register(function (delta)
-   local true_steer = RC:getSteer(delta)
+   local true_steer = -RC:getSteer(delta)
    models.RCcar.model.root.Base.Doll.B.LA:setRot(60-true_steer,-(true_steer*true_steer)*0.01-5,0)
    models.RCcar.model.root.Base.Doll.B.RA:setRot(60+true_steer,5+(true_steer*true_steer)*0.01,0)
    models.RCcar.model.root.Base.SteeringWheel.Hinge:setRot(0,true_steer,0)
