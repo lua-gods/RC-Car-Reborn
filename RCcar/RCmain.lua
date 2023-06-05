@@ -36,7 +36,9 @@ local Physics = {
       "minecraft:soul_sand",
       "minecraft:mud",
       "minecraft:chest",
-      "minecraft:ender_chest"
+      "minecraft:ender_chest",
+      "minecraft:powder_snow",
+      "minecraft:honey_block",
    },
 }
 local RC = {
@@ -84,6 +86,7 @@ local RC = {
    floor_block = nil,        -- the block the car is on, nil if air or transparent
    block_inside = nil,
    is_jumping = false,
+   is_handbreak = false,
    -->==========[ Statistics ]==========<--
    ltr = 0,                  -- last throttle distance
    tr = 0,                   -- throttle distance
@@ -142,6 +145,7 @@ Input.Honk.press = function ()
       honk_cooldown = 10
       pings.honk()
    end
+   return RC.engine
 end
 
 Input.Jump.press = function () if RC.engine and RC.is_on_floor or RC.is_underwater then pings.GNRCCARjump(RC.is_underwater) end return RC.engine end
@@ -162,8 +166,18 @@ Input.Right.release = function () if RC.engine then pings.syncControlSteer(RC.ct
 events.ENTITY_INIT:register(function ()
    RC.pos = player:getPos():add(0,1,0)
 end)
-
+local wh = false
 events.TICK:register(function ()
+   local ih = Input.Forward:isPressed() and Input.Backward:isPressed()
+   if wh ~= ih then
+      pings.handbreak(ih)
+      if ih then
+         RC.ctrl.y = RC.ctrl.y + 1
+      else
+         RC.ctrl.y = RC.ctrl.y - 1
+      end
+      wh = ih
+   end
    RC.lstr = RC.str
    RC.et = RC.et * 0.7 + math.lerp(RC.a_s,RC.a_sf,RC.e_a) * RC.ctrl.y * 0.4
    if RC.is_on_floor and RC.ctrl.x == 0 then
@@ -462,11 +476,12 @@ events.TICK:register(function ()
             RC.vel.y = RC.vel.y + 0.1
          end
          RC.vel.y = RC.vel.y + RC.g * ssr
+         RC.pos:add(0,0.01,0)
       end
    
       do
          local ssf = (RC.a_f-1) * ssr + 1
-         if RC.is_on_floor or RC.is_underwater then
+         if (RC.is_on_floor or RC.is_underwater) and not RC.is_handbreak then
             RC.vel.x = RC.vel.x * ssf - RC.mat.c3.x * RC.et * (1-ssf)
          end
          RC.pos.x = RC.pos.x + RC.vel.x * ssr
@@ -483,7 +498,7 @@ events.TICK:register(function ()
       
       do
          local ssf = (RC.a_f-1) * ssr + 1
-         if RC.is_on_floor or RC.is_underwater then
+         if (RC.is_on_floor or RC.is_underwater) and not RC.is_handbreak then
             RC.vel.z = RC.vel.z * ssf - RC.mat.c3.z * RC.et * (1-ssf)
          end
          RC.pos.z = RC.pos.z + RC.vel.z * ssr
@@ -554,6 +569,10 @@ events.TICK:register(function ()
    end
 end)
 
+function pings.handbreak(bool)
+   RC.is_handbreak = bool
+end
+
 function pings.syncControlThrottle(X)
    RC.ctrl.y = X
 end
@@ -589,7 +608,7 @@ end
 
 function pings.honk()
    API.ON_HORN:invoke()
-   sounds:playSound("honk",RC.pos,1,1)
+   sounds:playSound("RCcar.honk",RC.pos,1,1)
    animations["RCcar.model"].honk:stop():play()
 end
 
