@@ -462,7 +462,6 @@ events.TICK:register(function ()
             RC.vel.y = RC.vel.y + 0.1
          end
          RC.vel.y = RC.vel.y + RC.g * ssr
-         RC.pos:add(0,0.01,0)
       end
    
       do
