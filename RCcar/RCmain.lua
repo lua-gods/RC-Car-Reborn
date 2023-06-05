@@ -1,3 +1,4 @@
+---@diagnostic disable: return-type-mismatch
 --[[______   __                _                 __
   / ____/ | / /___ _____ ___  (_)___ ___  ____ _/ /____  _____
  / / __/  |/ / __ `/ __ `__ \/ / __ `__ \/ __ `/ __/ _ \/ ___/
@@ -41,6 +42,7 @@ local Physics = {
       "minecraft:honey_block",
    },
 }
+local deadly = {"lava","fire","void","spike","molten",}
 local RC = {
    -->==========[ Generic ]==========<--
    lpos = vectors.vec3(),    -- Last Tick Position
@@ -530,6 +532,20 @@ events.TICK:register(function ()
    RC.ldt = RC.dt
    RC.dt = RC.dt + RC.loc_vel.z
 
+   if host:isHost() then
+      local deafth = false
+      for key, d in pairs(deadly) do
+         if RC.block_inside.id:find(d) then
+            deafth = true
+            break
+         end
+      end
+      if deafth then
+         local p = player:getPos()
+         pings.syncState(p.x,p.y,p.z,0,0,0,0,0)
+      end
+   end
+
    if math.abs(RC.loc_vel.z) > 0.1 then
       if RC.floor_block then
          sounds:playSound(RC.floor_block:getSounds().step,RC.pos,0.3)
@@ -599,9 +615,8 @@ function pings.GNRCCARunjump()
 end
 
 function pings.syncState(x,y,z,r,t,vx,vy,vz)
-   if H then return end
    RC.pos = vectors.vec3(x,y,z)
-   RC.vel = vectors.vec3(vx,vy,vx)
+   RC.vel = vectors.vec3(vx,vy,vz)
    RC.e_a = t
    RC.rot = r
 end
