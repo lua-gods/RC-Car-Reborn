@@ -65,11 +65,13 @@ local RC = {
    lstr = 0,                 -- Last Tick Steer
    str = 0,                  -- Steer
    ctrl = vectors.vec2(),    -- Control Vec
+   e_a = 0,                  -- engine acceleration percentage
    -->==========[ Attributes ]==========<--
    mat = matrices.mat4(),
    a_s = 0.4,                -- Speed
-   a_sf = 2,                 -- Faster Speed
-   a_sfw = 5*10,             -- Faster Speed Wait
+   a_sf_fov_mul = 1.05,       -- Faster Speed FOV Multiplier <-(Markiplier)
+   a_sf = 0.8,               -- Faster Speed
+   a_sfw = 10,             -- Faster Speed Wait
    a_f = 0.8,                -- Friction
    jump_height = 0.3,        -- jump height
    g = -0.07,                -- gravity used by the car
@@ -90,6 +92,7 @@ local RC = {
 }
 -->====================[ Camera Properties ]====================<--
 local Camera = {
+   height = 0.4,
    ldir = vectors.vec2(),
    dir = vectors.vec2(),
    mode = false,
@@ -160,18 +163,17 @@ events.ENTITY_INIT:register(function ()
    RC.pos = player:getPos():add(0,1,0)
 end)
 
-local th_pow = 0
 events.TICK:register(function ()
    RC.lstr = RC.str
-   RC.et = RC.et * 0.7 + math.lerp(RC.a_s,RC.a_sf,th_pow/RC.a_sfw) * RC.ctrl.y * 0.4
+   RC.et = RC.et * 0.7 + math.lerp(RC.a_s,RC.a_sf,RC.e_a) * RC.ctrl.y * 0.4
    if RC.is_on_floor and RC.ctrl.x == 0 then
       if RC.ctrl.y ~= 0 then
-         th_pow = math.min(th_pow + 1/(th_pow+1),RC.a_sfw)
+         RC.e_a = math.min(RC.e_a + ((1-RC.e_a) * 0.1)/RC.a_sfw,1)
       else
-         th_pow = math.max(th_pow - 1,0)
+         RC.e_a = math.max(RC.e_a - 1/RC.a_sfw,0)
       end
    else
-      th_pow = math.max(th_pow - 0.1,0)
+      RC.e_a = math.max(RC.e_a - 0.1/RC.a_sfw,0)
    end
    RC.str = math.lerp(RC.str,RC.ctrl.x * -25,0.4) / math.clamp(math.abs(RC.et)+0.4,0.9,10)
 
@@ -229,6 +231,13 @@ function API:getSteer(delta)
    return math.lerp(RC.lstr,RC.str,delta)
 end
 
+---@param height number
+---@return table
+function API:setCameraHeight(height)
+   Camera.height = height
+   return self
+end
+
 ---Returns the block the car is on
 ---@return BlockState|nil
 function API:getFloorBlock()
@@ -248,6 +257,16 @@ end
 ---@return Vector2
 function API:getControlVector()
    return RC.ctrl
+end
+
+---Returns a Vector3 containing the data about the engine acceleration
+--***
+---X = minimum speed in meters/ticks
+---X = maximum speed in meters/ticks
+---X = the percentage on where in between it is, the range is 0 - 1, slowest - fastest
+---@return Vector3
+function API:getEngineThrottleData()
+   return vectors.vec3(RC.a_s,RC.a_sf,RC.e_a)
 end
 
 ---Returns the local Velocity of the RC car.
@@ -369,13 +388,13 @@ local function collision(pos,vel,axis)
          force_solid = true
       end
    end
-   local collision = {}
+   local coll = {}
    if force_solid then
-      collision = {{vectors.vec3(0,0,0),vectors.vec3(1,1,1)}}
+      coll = {{vectors.vec3(0,0,0),vectors.vec3(1,1,1)}}
    else
-      collision = block:getCollisionShape()
+      coll = block:getCollisionShape()
    end
-   for key, AABB in pairs(collision) do
+   for key, AABB in pairs(coll) do
       if AABB[1].x <= brpos.x and AABB[1].y <= brpos.y and AABB[1].z <= brpos.z
       and AABB[2].x >= brpos.x and AABB[2].y >= brpos.y and AABB[2].z >= brpos.z then
          collided = true
@@ -417,7 +436,7 @@ events.TICK:register(function ()
    RC.lvel = RC.vel:copy()
    RC.lrot = RC.rot
    RC.ltr = RC.tr
-   local substeps = math.max(math.ceil(RC.vel:length()),1)
+   local substeps = math.clamp(math.ceil(RC.vel:length()),1,10)
    local ssr = 1/substeps
    for _ = 1, substeps, 1 do
       do
@@ -531,7 +550,8 @@ events.TICK:register(function ()
    sync_timer = sync_timer - 1
    if sync_timer < 0 then
       sync_timer = 20
-      pings.syncState(snap(RC.pos.x,100),snap(RC.pos.y,100),snap(RC.pos.z,100),snap(RC.rot,100))
+      pings.syncState(snap(RC.pos.x,100),snap(RC.pos.y,100),snap(RC.pos.z,100),snap(RC.rot,100),RC.e_a,
+      snap(RC.vel.x,100),snap(RC.vel.y,100),snap(RC.vel.z,100))
    end
 end)
 
@@ -560,9 +580,11 @@ function pings.GNRCCARunjump()
    RC.g = RC.ng
 end
 
-function pings.syncState(x,y,z,r)
+function pings.syncState(x,y,z,r,t,vx,vy,vz)
    if H then return end
    RC.pos = vectors.vec3(x,y,z)
+   RC.vel = vectors.vec3(vx,vy,vx)
+   RC.e_a = t
    RC.rot = r
 end
 
@@ -591,7 +613,7 @@ events.POST_WORLD_RENDER:register(function (dt)
    local true_sus = math.lerp(RC.ls,RC.s,dt)
    local true_rot = math.lerp(RC.lrot,RC.rot,dt)
    Parts.root:setPos(true_pos * 16):setRot((true_vel.y-RC.g)*-RC.loc_vel.z*90,true_rot,0)
-   Parts.base:setPos(0,true_sus.y,0):setRot(math.deg(true_sus.z)*0.3,0,math.deg(true_sus.x))
+   Parts.base:setPos(0,true_sus.y,0):setRot(math.deg(-true_sus.z)*0.3,0,math.deg(-true_sus.x))
    for _, wheelData in pairs(Parts.steer_wheels) do
       wheelData[2]:setRot(math.deg(true_dist_trav)*wheelData[1],true_steer)
    end
@@ -624,7 +646,7 @@ events.POST_WORLD_RENDER:register(function (dt)
          else
             local transition = -(math.cos(math.pi * Camera.transition) - 1) / 2
             if renderer:isFirstPerson() then
-               renderer:setCameraPivot(math.lerp(hpos,true_pos:add(0,0.45+(true_sus.y)/16,0),transition))
+               renderer:setCameraPivot(math.lerp(hpos,true_pos:add(0,Camera.height+(true_sus.y)/16,0),transition))
                local shake = vectors.vec2()
                if RC.is_on_floor then
                   local intensity = math.min(RC.vel.xz:length(),2)
@@ -633,7 +655,7 @@ events.POST_WORLD_RENDER:register(function (dt)
                renderer:setCameraRot(crot.x+shake.x,math.lerp(crot.y,(crot.y-true_rot)%360,transition),math.deg(true_sus.x)*.3+shake.y)
                
             else
-               renderer:setCameraPivot(math.lerp(hpos,true_pos:add(0,0.4,0),transition))
+               renderer:setCameraPivot(math.lerp(hpos,true_pos:add(0,Camera.height,0),transition))
                if renderer:isCameraBackwards() then
                   renderer:setCameraRot(crot.x,math.lerp(crot.y, math.deg(math.atan2(true_cam_dir.z,true_cam_dir.x))+90+180,transition),0)
                else
@@ -642,7 +664,7 @@ events.POST_WORLD_RENDER:register(function (dt)
             end
          end
       end
-   renderer:setFOV(math.lerp(1,th_pow/RC.a_sfw + 1,Camera.transition))
+   renderer:setFOV(math.lerp(1,math.lerp(1,RC.a_sf_fov_mul,RC.e_a),Camera.transition))
 end)
 
 local lprot = vectors.vec2()
