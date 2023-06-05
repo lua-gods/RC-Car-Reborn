@@ -74,7 +74,7 @@ local RC = {
    mat = matrices.mat4(),
    a_s = 0.4,                -- Speed
    a_sf_fov_mul = 1.05,       -- Faster Speed FOV Multiplier <-(Markiplier)
-   a_sf = 0.8,               -- Faster Speed
+   a_sf = 1,               -- Faster Speed
    a_sfw = 10,             -- Faster Speed Wait
    a_f = 0.8,                -- Friction
    jump_height = 0.3,        -- jump height
@@ -186,10 +186,10 @@ events.TICK:register(function ()
       if RC.ctrl.y ~= 0 then
          RC.e_a = math.min(RC.e_a + ((1-RC.e_a) * 0.1)/RC.a_sfw,1)
       else
-         RC.e_a = math.max(RC.e_a - 1/RC.a_sfw,0)
+         RC.e_a = math.max(RC.e_a - 0.1/RC.a_sfw,0)
       end
    else
-      RC.e_a = math.max(RC.e_a - 0.1/RC.a_sfw,0)
+      RC.e_a = math.max(RC.e_a - 0.05/RC.a_sfw,0)
    end
    RC.str = math.lerp(RC.str,RC.ctrl.x * -25,0.4) / math.clamp(math.abs(RC.et)+0.4,0.9,10)
 
