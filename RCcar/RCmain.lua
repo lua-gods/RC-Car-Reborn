@@ -98,7 +98,7 @@ local RC = {
 }
 -->====================[ Camera Properties ]====================<--
 local Camera = {
-   height = 0.4,
+   height = 0.45,
    ldir = vectors.vec2(),
    dir = vectors.vec2(),
    mode = false,
