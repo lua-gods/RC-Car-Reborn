@@ -91,7 +91,7 @@ local RC = {
 }
 -->====================[ Camera Properties ]====================<--
 local Camera = {
-   height = 0.45,
+   height = 7.2/16,
    ldir = vectors.vec2(),
    dir = vectors.vec2(),
    mode = false,
@@ -106,9 +106,7 @@ local Camera = {
    doppler = 1,
 }
 -->==========[ Bake/Init ]==========<--
-
 Parts.root:setParentType("World")
-local jump_power = 0
 Camera.transition_duration = Camera.transition_duration / 10
 
 
@@ -251,7 +249,7 @@ end
 ---@param height number
 ---@return table
 function API:setCameraHeight(height)
-   Camera.height = height
+   Camera.height = height/16
    return self
 end
 
@@ -682,9 +680,9 @@ events.POST_WORLD_RENDER:register(function (dt)
    --   if (math.abs(RC.et+RC.loc_vel.z / RC.a_f) > 0.2 or math.abs(RC.loc_vel.x) > 0.05) and RC.is_on_floor then
    --      particles:newParticle("minecraft:block "..RC.floor_block.id,wheelData[2]:partToWorldMatrix().c4.xyz,RC.mat.c3.xyz*RC.et*100)
    --   end
-   --   if RC.is_underwater and math.abs(RC.et) > 0.2 then
-   --      particles:newParticle("minecraft:bubble_column_up",wheelData[2]:partToWorldMatrix().c4.xyz,RC.mat.c3.xyz*RC.et*3)
-   --   end
+   if RC.is_underwater and math.abs(RC.et) > 0.2 then
+      particles:newParticle("minecraft:bubble_column_up",wheelData[2]:partToWorldMatrix().c4.xyz,RC.mat.c3.xyz*RC.et*3)
+   end
    --end
 
    if not H then return end
@@ -747,6 +745,5 @@ events.RENDER:register(function (delta, context)
    vanilla_model.LEFT_ITEM:setVisible(hide)
    vanilla_model.LEFT_SLEEVE:setVisible(hide)
 end)
-
 
 return API
