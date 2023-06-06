@@ -12,6 +12,8 @@
 | WS | Throttles the RC (Requires Control mode) |
 | AD | Steers the RC (Requires Control mode) |
 | F | Honk |
+| Spacebar | Jump |
+| Double tap ` | Respawn Car |
 
 ## 🏎️ New since Prewrite🏁 
 * Suspension

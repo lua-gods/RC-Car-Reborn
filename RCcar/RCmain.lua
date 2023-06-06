@@ -124,8 +124,9 @@ Camera.transition_duration = Camera.transition_duration / 10
 
 
 -->====================[ Input ]====================<--
-
+local respawn_time_check = 0
 Input.Start.press = function ()
+   respawn_time_check = respawn_time_check + 5
    RC.engine = not RC.engine
    Camera.mode = RC.engine
    if RC.engine then
@@ -138,8 +139,18 @@ Input.Start.press = function ()
    else
       host:setActionbar('[{"text":"Remote Controll Mode: "},{"text":"Disabled","color":"red"}]')
    end
+   if respawn_time_check > 5 then
+      if player:isLoaded() then
+         local pos = player:getPos()
+         pings.syncState(pos.x,pos.y,pos.z,0,0,0,0,0)
+      end
+   end
    return true
 end
+
+events.TICK:register(function ()
+   respawn_time_check = math.max(respawn_time_check - 1,0)
+end)
 
 local honk_cooldown = 0
 Input.Honk.press = function ()
