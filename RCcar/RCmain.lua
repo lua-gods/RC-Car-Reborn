@@ -42,7 +42,8 @@ local Physics = {
       "minecraft:honey_block",
    },
 }
-local deadly = {"lava","fire","void","spike","molten",}
+local deadly = {"lava","fire","void","spike","molten","saw"}
+local safe = {"extinguished","neutered","safe","covered"}
 local RC = {
    -->==========[ Generic ]==========<--
    lpos = vectors.vec3(),    -- Last Tick Position
@@ -549,6 +550,14 @@ events.TICK:register(function ()
          if RC.block_inside.id:find(d) then
             deafth = true
             break
+         end
+      end
+      if deafth then
+         for key, d in pairs(safe) do
+            if RC.block_inside.id:find(d) then
+               deafth = false
+               break
+            end
          end
       end
       if deafth then
