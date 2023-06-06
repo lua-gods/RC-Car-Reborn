@@ -10,14 +10,6 @@ local katt = require("RCcar.KattEventsAPI")
 local Parts = {
    root = models.RCcar.model.root,
    base = models.RCcar.model.root.Base,
-   steer_wheels = {
-      {4,models.RCcar.model.root.Wheel.FL},
-      {4,models.RCcar.model.root.Wheel.FR},
-   },
-   engine_wheels = {
-      {5,models.RCcar.model.root.Wheel.BL},
-      {5,models.RCcar.model.root.Wheel.BR},
-   },
 }
 
 -->====================[ Input Map ]====================<--
@@ -74,15 +66,16 @@ local RC = {
    -->==========[ Attributes ]==========<--
    mat = matrices.mat4(),
    a_s = 0.4,                -- Speed
-   a_sf_fov_mul = 1.05,       -- Faster Speed FOV Multiplier <-(Markiplier)
-   a_sf = 1,               -- Faster Speed
-   a_sfw = 10,             -- Faster Speed Wait
+   a_sf_fov_mul = 1.15,      -- Faster Speed FOV Multiplier <-(Markiplier)
+   a_sf = 1,                 -- Faster Speed
+   a_sfw = 10,               -- Faster Speed Wait
    a_f = 0.8,                -- Friction
    jump_height = 0.3,        -- jump height
    g = -0.07,                -- gravity used by the car
-   wjg = 0.2,               -- normal gravity
+   wjg = 0.2,                -- normal gravity
    ng = -0.07,               -- normal gravity
    jg = -0.03,               -- jump gravity
+   wheels = {},
    -->==========[ States ]==========<--
    is_underwater = false,
    is_on_floor = false,      -- is on the floor
@@ -113,12 +106,7 @@ local Camera = {
    doppler = 1,
 }
 -->==========[ Bake/Init ]==========<--
-for _, value in pairs(Parts.engine_wheels) do
-   value[1] = 16/value[1]
-end
-for _, value in pairs(Parts.steer_wheels) do
-   value[1] = 16/value[1]
-end
+
 Parts.root:setParentType("World")
 local jump_power = 0
 Camera.transition_duration = Camera.transition_duration / 10
@@ -213,6 +201,7 @@ end)
 -->====================[ API ]====================<--
 local API = {ON_JUMP = katt.newEvent(),
 ON_UNJUMP = katt.newEvent(),
+ON_DEATH = katt.newEvent(),
 ON_HORN = katt.newEvent(),}
 
 ---Returns the keybind inputs of the car
@@ -372,6 +361,16 @@ function API:getCameraTransition()
    return Camera.transition
 end
 
+---Registers the given model as a wheel
+---@param model ModelPart
+---@param wheel_radius number
+---@param is_engine_wheel boolean
+---@param steer_angle number?
+function API:registerWheel(model,wheel_radius,is_engine_wheel,steer_angle)
+   if not steer_angle then steer_angle = 0 end
+   table.insert(RC.wheels,{m=model,wr=wheel_radius/16,isw=is_engine_wheel,sa=steer_angle})
+end
+
 -->====================[ Physics ]====================<--
 
 local function getStepHeight(pos)
@@ -528,7 +527,7 @@ events.TICK:register(function ()
       end
    end
 
-   RC.tr = RC.tr + RC.et * 4
+   RC.tr = RC.tr + RC.et
    RC.loc_lvel = RC.loc_vel
    local locMat =  matrices.mat4():rotateY(RC.rot)
    RC.loc_vel = (RC.vel:copy():mul(-1,1,1):augmented() * locMat).xyz
@@ -562,6 +561,7 @@ events.TICK:register(function ()
       end
       if deafth then
          local p = player:getPos()
+         API.ON_DEATH:invoke()
          pings.syncState(p.x,p.y,p.z,0,0,0,0,0)
       end
    end
@@ -662,23 +662,30 @@ events.POST_WORLD_RENDER:register(function (dt)
    local true_vel = math.lerp(RC.lvel,RC.vel,dt)
    local true_dist_trav = math.lerp(RC.ldt,RC.dt,dt)
    local throttle_trav = -math.lerp(RC.ltr,RC.tr,dt)
-   local true_steer = -math.lerp(RC.lstr,RC.str,dt)
+   local true_steer = -math.lerp(RC.lstr,RC.str,dt) / 33
    local true_sus = math.lerp(RC.ls,RC.s,dt)
    local true_rot = math.lerp(RC.lrot,RC.rot,dt)
    Parts.root:setPos(true_pos * 16):setRot((true_vel.y-RC.g)*-RC.loc_vel.z*90,true_rot,0)
    Parts.base:setPos(0,true_sus.y,0):setRot(math.deg(-true_sus.z)*0.3,0,math.deg(-true_sus.x))
-   for _, wheelData in pairs(Parts.steer_wheels) do
-      wheelData[2]:setRot(math.deg(true_dist_trav)*wheelData[1],true_steer)
-   end
-   for _, wheelData in pairs(Parts.engine_wheels) do
-      wheelData[2]:setRot(math.deg(throttle_trav)*wheelData[1] / 4,0)
-      if (math.abs(RC.et+RC.loc_vel.z / RC.a_f) > 0.2 or math.abs(RC.loc_vel.x) > 0.05) and RC.is_on_floor then
-         particles:newParticle("minecraft:block "..RC.floor_block.id,wheelData[2]:partToWorldMatrix().c4.xyz,RC.mat.c3.xyz*RC.et*100)
-      end
-      if RC.is_underwater and math.abs(RC.et) > 0.2 then
-         particles:newParticle("minecraft:bubble_column_up",wheelData[2]:partToWorldMatrix().c4.xyz,RC.mat.c3.xyz*RC.et*3)
+   for _, wheel in pairs(RC.wheels) do
+      if wheel.isw then
+         wheel.m:setRot(math.deg(throttle_trav)/wheel.wr,true_steer*wheel.sa)
+      else
+         wheel.m:setRot(math.deg(true_dist_trav)/wheel.wr*2,true_steer*wheel.sa)
       end
    end
+   --for _, wheelData in pairs(Parts.steer_wheels) do
+   --   wheelData[2]:setRot(math.deg(true_dist_trav)*wheelData[1],true_steer)
+   --end
+   --for _, wheelData in pairs(Parts.engine_wheels) do
+   --   wheelData[2]:setRot(math.deg(throttle_trav)*wheelData[1] / 4,0)
+   --   if (math.abs(RC.et+RC.loc_vel.z / RC.a_f) > 0.2 or math.abs(RC.loc_vel.x) > 0.05) and RC.is_on_floor then
+   --      particles:newParticle("minecraft:block "..RC.floor_block.id,wheelData[2]:partToWorldMatrix().c4.xyz,RC.mat.c3.xyz*RC.et*100)
+   --   end
+   --   if RC.is_underwater and math.abs(RC.et) > 0.2 then
+   --      particles:newParticle("minecraft:bubble_column_up",wheelData[2]:partToWorldMatrix().c4.xyz,RC.mat.c3.xyz*RC.et*3)
+   --   end
+   --end
 
    if not H then return end
       if not player:isLoaded() then return end
