@@ -668,6 +668,9 @@ events.POST_WORLD_RENDER:register(function (dt)
    for _, wheel in pairs(RC.wheels) do
       if wheel.isw then
          wheel.m:setRot(math.deg(throttle_trav)/wheel.wr,true_steer*wheel.sa)
+         --if RC.is_underwater and math.abs(RC.et) > 0.2 then
+         --   particles:newParticle("minecraft:bubble_column_up",RC.wheels:partToWorldMatrix().c4.xyz,RC.mat.c3.xyz*RC.et*3)
+         --end
       else
          wheel.m:setRot(math.deg(true_dist_trav)/wheel.wr*2,true_steer*wheel.sa)
       end
@@ -680,9 +683,7 @@ events.POST_WORLD_RENDER:register(function (dt)
    --   if (math.abs(RC.et+RC.loc_vel.z / RC.a_f) > 0.2 or math.abs(RC.loc_vel.x) > 0.05) and RC.is_on_floor then
    --      particles:newParticle("minecraft:block "..RC.floor_block.id,wheelData[2]:partToWorldMatrix().c4.xyz,RC.mat.c3.xyz*RC.et*100)
    --   end
-   if RC.is_underwater and math.abs(RC.et) > 0.2 then
-      particles:newParticle("minecraft:bubble_column_up",wheelData[2]:partToWorldMatrix().c4.xyz,RC.mat.c3.xyz*RC.et*3)
-   end
+   
    --end
 
    if not H then return end
