@@ -5,15 +5,17 @@
 * Upon equipping the avatar, the RC Car itself would spawn where you stand.
 * Pressing `Backtick` will toggle between being able to control the car or not, also called **Control mode**
 
+
 ## 🏎️ Keybinds 🏁 
-| Keybind   | Action |
-| --- | ----- |
-| ` | Toggles between Control mode |
-| WS | Throttles the RC (Requires Control mode) |
-| AD | Steers the RC (Requires Control mode) |
-| F | Honk |
-| Spacebar | Jump |
-| Double tap ` | Respawn Car |
+| Keybind  | Special    | Action                       | Control Mode only |
+| -------- | ---------- | ---------------------------- | ----------------- |
+| `        |            | Toggles between Control mode |                  |
+| W / S    |            | Throttles the RC             | ✔                 |
+| W & S    |            | Tire Burning                 | ✔                 |
+| A / D    |            | Steers the RC                | ✔                 |
+| F        |            | Honk                         | ✔                 |
+| Spacebar |            | Jump                         | ✔                 |
+| `        | Double tap | Respawn Car                  |                   |
 
 ## 🏎️ New since Prewrite🏁 
 * Suspension
