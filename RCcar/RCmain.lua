@@ -117,8 +117,8 @@ Input.Start.press = function ()
    RC.engine = not RC.engine
    Camera.mode = RC.engine
    if RC.engine then
-      pings.syncControlSteer(0)
-      pings.syncControlThrottle(0)
+      pings.GNRCcarCtrlSteer(0)
+      pings.GNRCcarCtrlThrottle(0)
       if player:isLoaded() then
          Camera.dir = RC.mat.c3.xz
       end
@@ -129,7 +129,7 @@ Input.Start.press = function ()
    if respawn_time_check > 5 then
       if player:isLoaded() then
          local pos = player:getPos()
-         pings.syncState(pos.x,pos.y,pos.z,0,0,0,0,0)
+         pings.GNRCcarSyncState(pos.x,pos.y,pos.z,0,0,0,0,0,false)
       end
    end
    return true
@@ -143,24 +143,24 @@ local honk_cooldown = 0
 Input.Honk.press = function ()
    if honk_cooldown <= 0 and RC.engine then
       honk_cooldown = 10
-      pings.honk()
+      pings.GNRCcarHonk()
    end
    return RC.engine
 end
 
 Input.Jump.press = function () if RC.engine and RC.is_on_floor or RC.is_underwater then pings.GNRCCARjump(RC.is_underwater) end return RC.engine end
 Input.Jump.release = function () if RC.engine then pings.GNRCCARunjump() end end
-Input.Forward.press = function () if RC.engine then pings.syncControlThrottle(RC.ctrl.y + 1) end return RC.engine end
-Input.Forward.release = function () if RC.engine then pings.syncControlThrottle(RC.ctrl.y - 1) end return RC.engine end
+Input.Forward.press = function () if RC.engine then pings.GNRCcarCtrlThrottle(RC.ctrl.y + 1) end return RC.engine end
+Input.Forward.release = function () if RC.engine then pings.GNRCcarCtrlThrottle(RC.ctrl.y - 1) end return RC.engine end
 
-Input.Backward.press = function () if RC.engine then pings.syncControlThrottle(RC.ctrl.y - 1) end return RC.engine end
-Input.Backward.release = function () if RC.engine then pings.syncControlThrottle(RC.ctrl.y + 1) end return RC.engine end
+Input.Backward.press = function () if RC.engine then pings.GNRCcarCtrlThrottle(RC.ctrl.y - 1) end return RC.engine end
+Input.Backward.release = function () if RC.engine then pings.GNRCcarCtrlThrottle(RC.ctrl.y + 1) end return RC.engine end
 
-Input.Left.press = function () if RC.engine then pings.syncControlSteer(RC.ctrl.x + 1) end return RC.engine end
-Input.Left.release = function () if RC.engine then pings.syncControlSteer(RC.ctrl.x - 1) end return RC.engine end
+Input.Left.press = function () if RC.engine then pings.GNRCcarCtrlSteer(RC.ctrl.x + 1) end return RC.engine end
+Input.Left.release = function () if RC.engine then pings.GNRCcarCtrlSteer(RC.ctrl.x - 1) end return RC.engine end
 
-Input.Right.press = function () if RC.engine then pings.syncControlSteer(RC.ctrl.x - 1) end return RC.engine end
-Input.Right.release = function () if RC.engine then pings.syncControlSteer(RC.ctrl.x + 1) end return RC.engine end
+Input.Right.press = function () if RC.engine then pings.GNRCcarCtrlSteer(RC.ctrl.x - 1) end return RC.engine end
+Input.Right.release = function () if RC.engine then pings.GNRCcarCtrlSteer(RC.ctrl.x + 1) end return RC.engine end
 
 
 events.ENTITY_INIT:register(function ()
@@ -170,7 +170,7 @@ local wh = false
 events.TICK:register(function ()
    local ih = Input.Forward:isPressed() and Input.Backward:isPressed()
    if wh ~= ih then
-      pings.handbreak(ih)
+      pings.GNRCcarHandbreak(ih)
       if ih then
          RC.ctrl.y = RC.ctrl.y + 1
       else
@@ -559,8 +559,7 @@ events.TICK:register(function ()
       end
       if deafth then
          local p = player:getPos()
-         API.ON_DEATH:invoke()
-         pings.syncState(p.x,p.y,p.z,0,0,0,0,0)
+         pings.GNRCcarSyncState(p.x,p.y,p.z,0,0,0,0,0,true)
       end
    end
 
@@ -598,21 +597,21 @@ events.TICK:register(function ()
    sync_timer = sync_timer - 1
    if sync_timer < 0 then
       sync_timer = 20
-      pings.syncState(snap(RC.pos.x,100),snap(RC.pos.y,100),snap(RC.pos.z,100),snap(RC.rot,100),RC.e_a,
-      snap(RC.vel.x,100),snap(RC.vel.y,100),snap(RC.vel.z,100))
+      pings.GNRCcarSyncState(snap(RC.pos.x,100),snap(RC.pos.y,100),snap(RC.pos.z,100),snap(RC.rot,100),RC.e_a,
+      snap(RC.vel.x,100),snap(RC.vel.y,100),snap(RC.vel.z,100),false)
    end
 end)
 
-function pings.handbreak(bool)
+function pings.GNRCcarHandbreak(bool)
    RC.is_handbreak = bool
 end
 
-function pings.syncControlThrottle(X)
-   RC.ctrl.y = X
+function pings.GNRCcarCtrlThrottle(throttle)
+   RC.ctrl.y = throttle
 end
 
-function pings.syncControlSteer(Y)
-   RC.ctrl.x = Y
+function pings.GNRCcarCtrlSteer(steer)
+   RC.ctrl.x = steer
 end
 
 function pings.GNRCCARjump(underwater)
@@ -632,14 +631,26 @@ function pings.GNRCCARunjump()
    RC.g = RC.ng
 end
 
-function pings.syncState(x,y,z,r,t,vx,vy,vz)
+---@param x number
+---@param y number
+---@param z number
+---@param r number
+---@param t number
+---@param vx number
+---@param vy number
+---@param vz number
+---@param death boolean
+function pings.GNRCcarSyncState(x,y,z,r,t,vx,vy,vz,death)
+   if death then
+      API.ON_DEATH:invoke(RC.pos:copy(),vectors.vec3(x,y,z))
+   end
    RC.pos = vectors.vec3(x,y,z)
    RC.vel = vectors.vec3(vx,vy,vz)
    RC.e_a = t
    RC.rot = r
 end
 
-function pings.honk()
+function pings.GNRCcarHonk()
    API.ON_HORN:invoke()
    sounds:playSound("RCcar.honk",RC.pos,1,1)
    animations["RCcar.model"].honk:stop():play()
