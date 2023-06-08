@@ -461,7 +461,7 @@ events.TICK:register(function ()
    RC.lvel = RC.vel:copy()
    RC.lrot = RC.rot
    RC.ltr = RC.tr
-   local substeps = math.clamp(math.ceil(RC.vel:length()),1,10)
+   local substeps = math.clamp(math.ceil(RC.vel:length()*4),1,10)
    local ssr = 1/substeps
    for _ = 1, substeps, 1 do
       do
@@ -476,7 +476,7 @@ events.TICK:register(function ()
          end
          if RC.is_underwater then
             RC.a_f = 0.9
-            RC.vel = RC.vel * 0.8 * ssr
+            RC.vel = RC.vel * 0.8
             RC.vel.y = RC.vel.y - RC.g * 0.9
          end
          local ssf = (RC.a_f-1) * ssr + 1
@@ -529,7 +529,6 @@ events.TICK:register(function ()
    RC.loc_lvel = RC.loc_vel
    local locMat =  matrices.mat4():rotateY(RC.rot)
    RC.loc_vel = (RC.vel:copy():mul(-1,1,1):augmented() * locMat).xyz
-   --print(RC.loc_vel.z,locMat.c3.xz)
    RC.mat = locMat
    RC.ls = RC.s:copy()
    RC.s = RC.s + RC.sv
@@ -679,23 +678,16 @@ events.POST_WORLD_RENDER:register(function (dt)
    for _, wheel in pairs(RC.wheels) do
       if wheel.isw then
          wheel.m:setRot(math.deg(throttle_trav)/wheel.wr,true_steer*wheel.sa)
-         --if RC.is_underwater and math.abs(RC.et) > 0.2 then
-         --   particles:newParticle("minecraft:bubble_column_up",RC.wheels:partToWorldMatrix().c4.xyz,RC.mat.c3.xyz*RC.et*3)
-         --end
+         if RC.is_underwater and math.abs(RC.et) > 0.2 then
+            particles:newParticle("minecraft:bubble_column_up",wheel.m:partToWorldMatrix().c4.xyz,RC.mat.c3.xyz*RC.et*3)
+         end
+         if  (math.abs(RC.et+RC.loc_vel.z / RC.a_f) > 0.2 or math.abs(RC.loc_vel.x) > 0.05) and RC.is_on_floor then
+            pcall(particles.newParticle,particles,"minecraft:block "..RC.floor_block.id,wheel.m:partToWorldMatrix().c4.xyz,RC.mat.c3.xyz*RC.et*100)
+         end
       else
          wheel.m:setRot(math.deg(true_dist_trav)/wheel.wr*2,true_steer*wheel.sa)
       end
    end
-   --for _, wheelData in pairs(Parts.steer_wheels) do
-   --   wheelData[2]:setRot(math.deg(true_dist_trav)*wheelData[1],true_steer)
-   --end
-   --for _, wheelData in pairs(Parts.engine_wheels) do
-   --   wheelData[2]:setRot(math.deg(throttle_trav)*wheelData[1] / 4,0)
-   --   if (math.abs(RC.et+RC.loc_vel.z / RC.a_f) > 0.2 or math.abs(RC.loc_vel.x) > 0.05) and RC.is_on_floor then
-   --      particles:newParticle("minecraft:block "..RC.floor_block.id,wheelData[2]:partToWorldMatrix().c4.xyz,RC.mat.c3.xyz*RC.et*100)
-   --   end
-   
-   --end
 
    if not H then return end
       if not player:isLoaded() then return end
@@ -748,14 +740,5 @@ events.POST_RENDER:register(function (x,y)
    end
 end)
 
-events.RENDER:register(function (delta, context)
-   local hide = (context ~= "FIRST_PERSON" or not RC.engine)
-   vanilla_model.RIGHT_ARM:setVisible(hide)
-   vanilla_model.RIGHT_ITEM:setVisible(hide)
-   vanilla_model.RIGHT_SLEEVE:setVisible(hide)
-   vanilla_model.LEFT_ARM:setVisible(hide)
-   vanilla_model.LEFT_ITEM:setVisible(hide)
-   vanilla_model.LEFT_SLEEVE:setVisible(hide)
-end)
 
 return API
