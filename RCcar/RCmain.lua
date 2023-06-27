@@ -117,13 +117,29 @@ Input.Start.press = function ()
    RC.engine = not RC.engine
    Camera.mode = RC.engine
    if RC.engine then
-      pings.GNRCcarCtrlSteer(0)
-      pings.GNRCcarCtrlThrottle(0)
+      local steer = 0
+      if Input.Left:isPressed() then
+         steer = steer + 1
+      end
+      if Input.Right:isPressed() then
+         steer = steer - 1
+      end
+      pings.GNRCcarCtrlSteer(steer)
+      local throttle = 0
+      if Input.Forward:isPressed() then
+         throttle = throttle + 1
+      end
+      if Input.Backward:isPressed() then
+         throttle = throttle - 1
+      end
+      pings.GNRCcarCtrlThrottle(throttle)
       if player:isLoaded() then
          Camera.dir = RC.mat.c3.xz
       end
       host:setActionbar('[{"text":"Remote Controll Mode: "},{"text":"Enabled","color":"green"}]')
    else
+      pings.GNRCcarCtrlSteer(0)
+      pings.GNRCcarCtrlThrottle(0)
       host:setActionbar('[{"text":"Remote Controll Mode: "},{"text":"Disabled","color":"red"}]')
    end
    if respawn_time_check > 5 then
