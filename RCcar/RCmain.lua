@@ -726,7 +726,11 @@ events.POST_WORLD_RENDER:register(function (dt)
             end
          end
       end
-   renderer:setFOV(math.lerp(1,math.lerp(1,RC.a_sf_fov_mul,RC.e_a),Camera.transition))
+   if Camera.transition < 0.01 then
+      renderer:setFOV()
+   else
+      renderer:setFOV(math.lerp(1,math.lerp(1,RC.a_sf_fov_mul,RC.e_a),Camera.transition))
+   end
 end)
 
 local lprot = vectors.vec2()
