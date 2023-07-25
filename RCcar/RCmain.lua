@@ -1,4 +1,3 @@
----@diagnostic disable: return-type-mismatch
 --[[______   __                _                 __
   / ____/ | / /___ _____ ___  (_)___ ___  ____ _/ /____  _____
  / / __/  |/ / __ `/ __ `__ \/ / __ `__ \/ __ `/ __/ _ \/ ___/
@@ -184,10 +183,10 @@ events.TICK:register(function ()
       if RC.ctrl.y ~= 0 then
          RC.e_a = math.min(RC.e_a + ((1-RC.e_a) * 0.1)/RC.a_sfw,1)
       else
-         RC.e_a = math.max(RC.e_a - 0.1/RC.a_sfw,0)
+         RC.e_a = math.max(RC.e_a - 1/RC.a_sfw,0)
       end
    else
-      RC.e_a = math.max(RC.e_a - 0.05/RC.a_sfw,0)
+      RC.e_a = math.max(RC.e_a - 0.1/RC.a_sfw,0)
    end
    RC.str = math.lerp(RC.str,RC.ctrl.x * -25,0.4) / math.clamp(math.abs(RC.et)+0.4,0.9,10)
 
@@ -461,7 +460,7 @@ events.TICK:register(function ()
    RC.lvel = RC.vel:copy()
    RC.lrot = RC.rot
    RC.ltr = RC.tr
-   local substeps = math.clamp(math.ceil(RC.vel:length()*4),1,10)
+   local substeps = math.clamp(math.ceil(RC.vel:length()),1,10)
    local ssr = 1/substeps
    for _ = 1, substeps, 1 do
       do
@@ -680,10 +679,10 @@ events.POST_WORLD_RENDER:register(function (dt)
          wheel.m:setRot(math.deg(throttle_trav)/wheel.wr,true_steer*wheel.sa)
          if RC.is_underwater and math.abs(RC.et) > 0.2 then
             particles:newParticle("minecraft:bubble_column_up",wheel.m:partToWorldMatrix().c4.xyz,RC.mat.c3.xyz*RC.et*3)
-         end
+   end
          if  (math.abs(RC.et+RC.loc_vel.z / RC.a_f) > 0.2 or math.abs(RC.loc_vel.x) > 0.05) and RC.is_on_floor then
             pcall(particles.newParticle,particles,"minecraft:block "..RC.floor_block.id,wheel.m:partToWorldMatrix().c4.xyz,RC.mat.c3.xyz*RC.et*100)
-         end
+      end
       else
          wheel.m:setRot(math.deg(true_dist_trav)/wheel.wr*2,true_steer*wheel.sa)
       end
@@ -729,7 +728,7 @@ events.POST_WORLD_RENDER:register(function (dt)
    if Camera.transition < 0.01 then
       renderer:setFOV()
    else
-      renderer:setFOV(math.lerp(1,math.lerp(1,RC.a_sf_fov_mul,RC.e_a),Camera.transition))
+   renderer:setFOV(math.lerp(1,math.lerp(1,RC.a_sf_fov_mul,RC.e_a),Camera.transition))
    end
 end)
 
