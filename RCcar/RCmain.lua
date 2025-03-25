@@ -23,7 +23,7 @@ local Input = {
 }
 
 local Physics = {
-	margin = 0.001,
+	margin = 0.01,
 	force_solid = {
 		"minecraft:soul_sand",
 		"minecraft:mud",
@@ -75,6 +75,7 @@ local RC = {
 	,wjg--[[                        normal gravity ]] = 0.2
 	,ng--[[                         normal gravity ]] = -0.07
 	,jg--[[                           jump gravity ]] = -0.03
+	,size--[[                             Car Size ]] = vec(0.5,0.5,0.5)
 	,wheels = {} --(automatic)
 	-->========================================[ Statistics ]=========================================<--
 	,is_underwater--[[                             ]] = false  -- locked
@@ -203,7 +204,7 @@ events.TICK:register(function ()
 			RC.e_a = math.max(RC.e_a - 1/RC.a_sfw,0)
 		end
 	else
-		RC.e_a = math.max(RC.e_a - 0.1/RC.a_sfw,0)
+		RC.e_a = math.max(RC.e_a - 0.02/RC.a_sfw,0)
 	end
 	RC.str = math.lerp(RC.str,RC.ctrl.x * -25,0.4) / math.clamp(math.abs(RC.et)+0.4,0.9,10)
 
@@ -387,84 +388,87 @@ end
 
 -->====================[ Physics ]====================<--
 
+local function getCollisionShapes(pos)
+	local expand = RC.size * vec(0.5,1,0.5)
+	local spos = pos:copy()
+	
+	local i = 0
+	local collision = {}
+	local forceSolid = false
+	local extent = RC.size * 0.5
+	for key, block in pairs(world.getBlocks((spos - extent),(spos + extent))) do
+		local bpos = block:getPos()
+		for _, name in pairs(Physics.force_solid) do
+			if name == block.id then
+				forceSolid = true
+				break
+			end
+		end
+		
+		if forceSolid then
+			i = i + 1
+			collision[i] = {bpos,bpos+vec(1,1,1)}
+		else
+			for _, aabb in pairs(block:getCollisionShape()) do
+				i = i + 1
+				collision[i] = {
+					aabb[1] + bpos - expand,
+					aabb[2] + bpos + expand.x_z
+				}
+			end
+		end
+	end
+	return collision
+end
+
 local function getStepHeight(pos)
 	local spos = pos:copy()
 	local stepHeight = 0
 	for i = 1, 10, 1 do
-		local force_solid = false
-		local block, brpos = world.getBlockState(spos), spos % 1
-		for _, namespace in pairs(Physics.force_solid) do
-			if namespace == block.id then
-				force_solid = true
-			end
-		end
-		local collision = {}
-		if force_solid then
-			collision = {{vectors.vec3(0,0,0),vectors.vec3(1,1,1)}}
-		else
-			collision = block:getCollisionShape()
-		end
-		local bpos = spos - brpos
-		for key, AABB in pairs(collision) do
-			if AABB[1].x <= brpos.x and AABB[1].y <= brpos.y and AABB[1].z <= brpos.z
-			and AABB[2].x >= brpos.x and AABB[2].y >= brpos.y and AABB[2].z >= brpos.z then
-				brpos.y = AABB[2].y + Physics.margin
-				spos.y = bpos.y + AABB[2].y + Physics.margin
-				stepHeight = spos.y-pos.y
-			else
-				break
+		local coll = getCollisionShapes(spos)
+		for key, aabb in pairs(coll) do
+			if aabb[2].y > spos.y and aabb[1] <= spos and aabb[2] >= spos then
+				spos.y = aabb[2].y + Physics.margin
 			end
 		end
 	end
+	stepHeight = spos.y-pos.y
 	return stepHeight
 end
 
 local function collision(pos,vel,axis)
-	local block, brpos = world.getBlockState(pos), pos % 1
-	local bpos = pos - brpos
+	local brpos = pos:copy()
 	local collided = false
-	local force_solid = false
-	for _, namespace in pairs(Physics.force_solid) do
-		if namespace == block.id then
-			force_solid = true
-		end
-	end
-	local coll = {}
-	if force_solid then
-		coll = {{vectors.vec3(0,0,0),vectors.vec3(1,1,1)}}
-	else
-		coll = block:getCollisionShape()
-	end
-	for key, AABB in pairs(coll) do
-		if AABB[1].x <= brpos.x and AABB[1].y <= brpos.y and AABB[1].z <= brpos.z
-		and AABB[2].x >= brpos.x and AABB[2].y >= brpos.y and AABB[2].z >= brpos.z then
+	local coll = getCollisionShapes(pos)
+	for _, aabb in pairs(coll) do
+		if aabb[1] <= pos and aabb[2] >= pos then
 			collided = true
 			if axis == 1 then
 				if math.sign(vel) < 0 then
-					brpos.x = AABB[2].x + Physics.margin else brpos.x = AABB[1].x - Physics.margin
+					brpos.x = aabb[2].x + Physics.margin else brpos.x = aabb[1].x - Physics.margin
 				end
 			elseif axis == 2 then
 				if math.sign(vel) < 0 then
-					brpos.y = AABB[2].y + Physics.margin else brpos.y = AABB[1].y - Physics.margin
+					brpos.y = aabb[2].y + Physics.margin else brpos.y = aabb[1].y - Physics.margin
 				end
 			elseif axis == 3 then
 				if math.sign(vel) < 0 then
-					brpos.z = AABB[2].z + Physics.margin else brpos.z = AABB[1].z - Physics.margin
+					brpos.z = aabb[2].z + Physics.margin else brpos.z = aabb[1].z - Physics.margin
 				end
 			end
 		end
 	end
 	if collided then
 		if axis == 1 then
-			return bpos.x+brpos.x
+			return brpos.x
   elseif axis == 2 then
-			return bpos.y+brpos.y
+			return brpos.y
   elseif axis == 3 then
-			return bpos.z+brpos.z
+			return brpos.z
 		end
 	end
 end
-local engine_sound = sounds:playSound("engine",RC.pos,1,0,true)
+local engineSound = sounds:playSound("engine",RC.pos,1,0,true)
 events.TICK:register(function ()
 	Camera.lcam_dist = Camera.cam_dist
 	local cdist = (RC.pos-client:getCameraPos()):length()
@@ -478,74 +482,69 @@ events.TICK:register(function ()
 			break
 		end
 	end
-	--print(Camera.doppler)
-	engine_sound:setPos(RC.pos):setPitch((e*0.8+0.7) * Camera.doppler):setVolume(math.clamp(math.clamp(e*8,0.0,1),0,0.1))
+	engineSound:setPos(RC.pos):setPitch((e*1+0.7) * Camera.doppler):setVolume(math.clamp(math.clamp(e*8,0.0,1),0,0.1))
 	RC.lpos = RC.pos:copy()
 	RC.lvel = RC.vel:copy()
 	RC.lrot = RC.rot
 	RC.ltr = RC.tr
-	local substeps = math.clamp(math.ceil(RC.vel:length()),1,10)
-	local ssr = 1/substeps
-	for _ = 1, substeps, 1 do
-		do
-			RC.pos.y = RC.pos.y + RC.vel.y * ssr
-			local result = collision(RC.pos,RC.vel.y,2)
-			local block = world.getBlockState(RC.pos:add(0,-0.01,0))
-			if block:hasCollision() then
-				RC.floor_block = block
-				RC.a_f = block:getFriction()
+	do
+		RC.pos.y = RC.pos.y + RC.vel.y
+		local result = collision(RC.pos,RC.vel.y,2)
+		local block = world.getBlockState(RC.pos:add(0,-0.01,0))
+		if block:hasCollision() then
+			RC.floor_block = block
+			RC.a_f = block:getFriction()
+		else
+			RC.floor_block = nil
+		end
+		if RC.is_underwater then
+			RC.a_f = 0.9
+			RC.vel = RC.vel * 0.8
+			RC.vel.y = RC.vel.y - RC.g * 0.9
+		end
+		local ssf = (RC.a_f-1) + 1
+		if result and block:hasCollision() then RC.pos.y = result RC.vel:mul(ssf,0,ssf) RC.is_on_floor = true else RC.is_on_floor = false end
+		RC.block_inside = world.getBlockState(RC.pos)
+		RC.is_underwater = (#RC.block_inside:getFluidTags() ~= 0)
+		if RC.block_inside.id == "minecraft:bubble_column" then
+			RC.vel.y = RC.vel.y + 0.1
+		end
+		RC.vel.y = RC.vel.y + RC.g
+		RC.pos:add(0,0.01,0)
+	end
+
+	do
+		local ssf = (RC.a_f-1) + 1
+		if (RC.is_on_floor or RC.is_underwater) and not RC.is_handbreak then
+			RC.vel.x = RC.vel.x * ssf - RC.mat.c3.x * RC.et * (1-ssf)
+		end
+		RC.pos.x = RC.pos.x + RC.vel.x
+		local result = collision(RC.pos,RC.vel.x,1)
+		if result then
+			local stepHeight = getStepHeight(RC.pos)
+			if stepHeight <= 1.1 and stepHeight > 0 then
+				RC.pos.y = RC.pos.y + stepHeight
+				RC.vel.y = RC.vel.y + 0.2
 			else
-				RC.floor_block = nil
+				RC.pos.x = result RC.vel:mul(0,ssf,ssf)
 			end
-			if RC.is_underwater then
-				RC.a_f = 0.9
-				RC.vel = RC.vel * 0.8
-				RC.vel.y = RC.vel.y - RC.g * 0.9
-			end
-			local ssf = (RC.a_f-1) * ssr + 1
-			if result and block:hasCollision() then RC.pos.y = result RC.vel:mul(ssf,0,ssf) RC.is_on_floor = true else RC.is_on_floor = false end
-			RC.block_inside = world.getBlockState(RC.pos)
-			RC.is_underwater = (#RC.block_inside:getFluidTags() ~= 0)
-			if RC.block_inside.id == "minecraft:bubble_column" then
-				RC.vel.y = RC.vel.y + 0.1
-			end
-			RC.vel.y = RC.vel.y + RC.g * ssr
-			RC.pos:add(0,0.01,0)
 		end
+	end
 	
-		do
-			local ssf = (RC.a_f-1) * ssr + 1
-			if (RC.is_on_floor or RC.is_underwater) and not RC.is_handbreak then
-				RC.vel.x = RC.vel.x * ssf - RC.mat.c3.x * RC.et * (1-ssf)
-			end
-			RC.pos.x = RC.pos.x + RC.vel.x * ssr
-			local result = collision(RC.pos,RC.vel.x,1)
-			if result then
-				local step_height = getStepHeight(RC.pos)
-				if step_height <= 1.1 then
-					RC.pos.y = RC.pos.y + step_height
-					RC.vel.y = RC.vel.y + 0.2
-				else
-					RC.pos.x = result RC.vel:mul(0,ssf,ssf)
-				end
-			end
+	do
+		local ssf = (RC.a_f-1) + 1
+		if (RC.is_on_floor or RC.is_underwater) and not RC.is_handbreak then
+			RC.vel.z = RC.vel.z * ssf - RC.mat.c3.z * RC.et * (1-ssf)
 		end
-		
-		do
-			local ssf = (RC.a_f-1) * ssr + 1
-			if (RC.is_on_floor or RC.is_underwater) and not RC.is_handbreak then
-				RC.vel.z = RC.vel.z * ssf - RC.mat.c3.z * RC.et * (1-ssf)
-			end
-			RC.pos.z = RC.pos.z + RC.vel.z * ssr
-			local result = collision(RC.pos,RC.vel.z,3)
-			if result then
-				local step_height = getStepHeight(RC.pos)
-				if step_height <= 1 then
-					RC.pos.y = RC.pos.y + step_height
-					RC.vel.y = RC.vel.y + 0.2
-				else
-					RC.pos.z = result RC.vel:mul(ssf,ssf,0)
-				end
+		RC.pos.z = RC.pos.z + RC.vel.z
+		local result = collision(RC.pos,RC.vel.z,3)
+		if result then
+			local stepHeight = getStepHeight(RC.pos)
+			if stepHeight <= 1 and stepHeight > 0 then
+				RC.pos.y = RC.pos.y + stepHeight
+				RC.vel.y = RC.vel.y + 0.2
+			else
+				RC.pos.z = result RC.vel:mul(ssf,ssf,0)
 			end
 		end
 	end
