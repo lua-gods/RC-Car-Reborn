@@ -27,6 +27,7 @@ local Physics = {
 	force_solid = {
 		"minecraft:soul_sand",
 		"minecraft:mud",
+		"minecraft:dirt_path",
 		"minecraft:chest",
 		"minecraft:ender_chest",
 		"minecraft:powder_snow",
@@ -394,9 +395,10 @@ local function getCollisionShapes(pos)
 	
 	local i = 0
 	local collision = {}
-	local forceSolid = false
 	local extent = RC.size * 0.5
-	for key, block in pairs(world.getBlocks((spos - extent),(spos + extent))) do
+	
+	for key, block in pairs(world.getBlocks((spos - 2),(spos + 2))) do
+		local forceSolid = false
 		local bpos = block:getPos()
 		for _, name in pairs(Physics.force_solid) do
 			if name == block.id then
@@ -407,7 +409,10 @@ local function getCollisionShapes(pos)
 		
 		if forceSolid then
 			i = i + 1
-			collision[i] = {bpos,bpos+vec(1,1,1)}
+			collision[i] = {
+				vec(0,0,0) + bpos - expand,
+				vec(1,1,1) + bpos + expand.x_z
+			}
 		else
 			for _, aabb in pairs(block:getCollisionShape()) do
 				i = i + 1
