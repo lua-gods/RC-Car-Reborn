@@ -52,7 +52,7 @@ local RC = {
 	
 	-->========================================[ Suspension ]=========================================<--
 	,ls--[[                   Last Tick Suspension ]] = vec(0,0,0)  -- locked
-	,s--[[                              Suspension ]] = vec(0,0,0) 
+	,s--[[                              Suspension ]] = vec(0,0,0)
 	,sv--[[                    Suspension Velocity ]] = vec(0,0,0)  -- locked
 	
 	-->========================================[ Engine ]=========================================<--
@@ -91,19 +91,19 @@ local RC = {
 }
 -->========================================[ Camera ]=========================================<--
 local Camera = {
-	height--[[              ]] = 7.2/16,
-	ldir--[[                ]] = vectors.vec2(),
-	dir--[[                 ]] = vectors.vec2(),
-	enabled--[[             ]] = false,
-	transition--[[          ]] = 0,
-	dist--[[                ]] = 3,
-	rot_offset--[[          ]] = 0,
+	height--[[               ]] = 7.2/16
+	,ldir--[[                ]] = vectors.vec2()
+	,dir--[[                 ]] = vectors.vec2()
+	,enabled--[[             ]] = false
+	,transition--[[          ]] = 0
+	,dist--[[                ]] = 3
+	,rot_offset--[[          ]] = 0
 
-	transition_duration--[[ ]] = 1,
+	,transition_duration--[[ ]] = 1
 
-	lcam_dist--[[           ]] = 0,
-	cam_dist--[[            ]] = 0,
-	doppler--[[             ]] = 1,
+	,lcam_dist--[[           ]] = 0
+	,cam_dist--[[            ]] = 0
+	,doppler--[[             ]] = 1
 }
 -->==========[ Bake/Init ]==========<--
 Parts.root:setParentType("World")
@@ -389,7 +389,7 @@ end
 
 local function getStepHeight(pos)
 	local spos = pos:copy()
-	local step_height = 0
+	local stepHeight = 0
 	for i = 1, 10, 1 do
 		local force_solid = false
 		local block, brpos = world.getBlockState(spos), spos % 1
@@ -410,13 +410,13 @@ local function getStepHeight(pos)
 			and AABB[2].x >= brpos.x and AABB[2].y >= brpos.y and AABB[2].z >= brpos.z then
 				brpos.y = AABB[2].y + Physics.margin
 				spos.y = bpos.y + AABB[2].y + Physics.margin
-				step_height = spos.y-pos.y
+				stepHeight = spos.y-pos.y
 			else
 				break
 			end
 		end
 	end
-	return step_height
+	return stepHeight
 end
 
 local function collision(pos,vel,axis)
@@ -464,15 +464,22 @@ local function collision(pos,vel,axis)
 		end
 	end
 end
---local engine_sound = sounds:playSound("engine",RC.pos,1,0,true):play()
+local engine_sound = sounds:playSound("engine",RC.pos,1,0,true)
 events.TICK:register(function ()
-	--Camera.lcam_dist = Camera.cam_dist
-	--local cdist = (RC.pos-client:getCameraPos()):length()
-	--Camera.cam_dist = cdist
-	--Camera.doppler = math.clamp(Camera.lcam_dist-Camera.cam_dist,-0.9,0.9) * 0.3 +1
-	--local e = math.abs(RC.et)
+	Camera.lcam_dist = Camera.cam_dist
+	local cdist = (RC.pos-client:getCameraPos()):length()
+	Camera.cam_dist = cdist
+	Camera.doppler = math.clamp(Camera.lcam_dist-Camera.cam_dist,-0.9,0.9) * 0.3 +1
+	local e = math.abs(RC.et*1.3)
+	for i = 1, 10, 1 do
+		if e > 1 then
+			e = e * 1.3 - 0.8
+		else
+			break
+		end
+	end
 	--print(Camera.doppler)
-	--engine_sound:setPos(RC.pos):setPitch((e*0.8+0.8) * Camera.doppler):setVolume(math.clamp((math.clamp(e*8,0.0,1)/cdist^2)*5,0,0.1))
+	engine_sound:setPos(RC.pos):setPitch((e*0.8+0.7) * Camera.doppler):setVolume(math.clamp(math.clamp(e*8,0.0,1),0,0.1))
 	RC.lpos = RC.pos:copy()
 	RC.lvel = RC.vel:copy()
 	RC.lrot = RC.rot
@@ -517,6 +524,7 @@ events.TICK:register(function ()
 				local step_height = getStepHeight(RC.pos)
 				if step_height <= 1.1 then
 					RC.pos.y = RC.pos.y + step_height
+					RC.vel.y = RC.vel.y + 0.2
 				else
 					RC.pos.x = result RC.vel:mul(0,ssf,ssf)
 				end
@@ -534,6 +542,7 @@ events.TICK:register(function ()
 				local step_height = getStepHeight(RC.pos)
 				if step_height <= 1 then
 					RC.pos.y = RC.pos.y + step_height
+					RC.vel.y = RC.vel.y + 0.2
 				else
 					RC.pos.z = result RC.vel:mul(ssf,ssf,0)
 				end
@@ -580,7 +589,7 @@ events.TICK:register(function ()
 
 	if math.abs(RC.loc_vel.z) > 0.1 then
 		if RC.floor_block then
-			sounds:playSound(RC.floor_block:getSounds().step,RC.pos,0.3)
+			sounds:playSound(RC.floor_block:getSounds().step,RC.pos,0.1)
 		elseif RC.is_underwater then
 			sounds:playSound("minecraft:entity.player.swim",RC.pos,0.005)
 		end
@@ -673,23 +682,23 @@ end
 
 -->====================[ Rendering ]====================<--
 
-local delta_frame = 0
+local deltaFrame = 0
 local lsys_time = client:getSystemTime()
 events.WORLD_RENDER:register(function (delta)
 	local sys_time = client:getSystemTime()
-	delta_frame = (sys_time-lsys_time) * 0.01
+	deltaFrame = (sys_time-lsys_time) * 0.01
 	lsys_time = sys_time
 end)
 
 events.POST_WORLD_RENDER:register(function (dt)
-	local true_pos = math.lerp(RC.lpos,RC.pos,dt)
+	local tpos = math.lerp(RC.lpos,RC.pos,dt)
 	local true_vel = math.lerp(RC.lvel,RC.vel,dt)
 	local true_dist_trav = math.lerp(RC.ldt,RC.dt,dt)
 	local throttle_trav = -math.lerp(RC.ltr,RC.tr,dt)
 	local true_steer = -math.lerp(RC.lstr,RC.str,dt) / 33
 	local true_sus = math.lerp(RC.ls,RC.s,dt)
 	local true_rot = math.lerp(RC.lrot,RC.rot,dt)
-	Parts.root:setPos(true_pos * 16):setRot((true_vel.y-RC.g)*-RC.loc_vel.z*90,true_rot,0)
+	Parts.root:setPos(tpos * 16):setRot((true_vel.y-RC.g)*-RC.loc_vel.z*90,true_rot,0)
 	Parts.base:setPos(0,true_sus.y,0):setRot(math.deg(-true_sus.z)*0.3,0,math.deg(-true_sus.x))
 	for _, wheel in pairs(RC.wheels) do
 		if wheel.isw then
@@ -709,14 +718,14 @@ events.POST_WORLD_RENDER:register(function (dt)
 		if not player:isLoaded() then return end
 		local crot = player:getRot()
 		crot.y = (crot.y) % 360 -- <=== El stupido
-		local true_cam_dir = math.lerp(Camera.ldir,Camera.dir,dt)
-		true_cam_dir = vectors.vec3(true_cam_dir.x,0.5,true_cam_dir.y):add(0,0.5,0)*Camera.dist
+		local trueCamDir = math.lerp(Camera.ldir,Camera.dir,dt)
+		trueCamDir = vectors.vec3(trueCamDir.x,0.5,trueCamDir.y):add(0,0.5,0)*Camera.dist
 		if player:isLoaded() then
 			local hpos = player:getPos(dt):add(0,player:getEyeHeight(),0)
 			if Camera.enabled then
-				Camera.transition = math.min(Camera.transition + delta_frame * Camera.transition_duration,1)
+				Camera.transition = math.min(Camera.transition + deltaFrame * Camera.transition_duration,1)
 			else
-				Camera.transition = math.max(Camera.transition - delta_frame * Camera.transition_duration,0)
+				Camera.transition = math.max(Camera.transition - deltaFrame * Camera.transition_duration,0)
 			end
 			if Camera.transition < 0.001 then
 				renderer:setCameraPivot()
@@ -724,7 +733,7 @@ events.POST_WORLD_RENDER:register(function (dt)
 			else
 				local transition = -(math.cos(math.pi * Camera.transition) - 1) / 2
 				if renderer:isFirstPerson() then
-					renderer:setCameraPivot(math.lerp(hpos,true_pos:add(0,Camera.height+(true_sus.y)/16,0),transition))
+					renderer:setCameraPivot(math.lerp(hpos,tpos:add(0,Camera.height+(true_sus.y)/16,0),transition))
 					local shake = vectors.vec2()
 					if RC.is_on_floor then
 						local intensity = math.min(RC.vel.xz:length(),2)
@@ -733,11 +742,11 @@ events.POST_WORLD_RENDER:register(function (dt)
 					renderer:setCameraRot(crot.x+shake.x,math.lerp(crot.y,(crot.y-true_rot)%360,transition),math.deg(true_sus.x)*.3+shake.y)
 					
 				else
-					renderer:setCameraPivot(math.lerp(hpos,true_pos:add(0,Camera.height,0),transition))
+					renderer:setCameraPivot(math.lerp(hpos,tpos:add(0,Camera.height,0),transition))
 					if renderer:isCameraBackwards() then
-						renderer:setCameraRot(crot.x,math.lerp(crot.y, math.deg(math.atan2(true_cam_dir.z,true_cam_dir.x))+90+180,transition),0)
+						renderer:setCameraRot(crot.x,math.lerp(crot.y, math.deg(math.atan2(trueCamDir.z,trueCamDir.x))+90+180,transition),0)
 					else
-						renderer:setCameraRot(crot.x,math.lerp(crot.y, math.deg(math.atan2(true_cam_dir.z,true_cam_dir.x))+90,transition),0)
+						renderer:setCameraRot(crot.x,math.lerp(crot.y, math.deg(math.atan2(trueCamDir.z,trueCamDir.x))+90,transition),0)
 					end
 				end
 			end
