@@ -147,7 +147,7 @@ Input.Start.press = function ()
 	if respawn_time_check > 5 then
 		if player:isLoaded() then
 			local pos = player:getPos()
-			pings.GNRCcarSyncState(pos.x,pos.y,pos.z,0,0,0,0,0,false)
+			pings.GNRCcarSyncState(pos.x,pos.y,pos.z,0,0,0,0,0,false,RC.et,RC.ctrl)
 		end
 	end
 	return true
@@ -587,7 +587,7 @@ events.TICK:register(function ()
 		end
 		if deafth then
 			local p = player:getPos()
-			pings.GNRCcarSyncState(p.x,p.y,p.z,0,0,0,0,0,true)
+			pings.GNRCcarSyncState(p.x,p.y,p.z,0,0,0,0,0,true,RC.et,RC.ctrl)
 		end
 	end
 
@@ -624,9 +624,9 @@ events.TICK:register(function ()
 	if not H then return end
 	sync_timer = sync_timer - 1
 	if sync_timer < 0 then
-		sync_timer = 20
-		pings.GNRCcarSyncState(snap(RC.pos.x,100),snap(RC.pos.y,100),snap(RC.pos.z,100),snap(RC.rot,100),RC.e_a,
-		snap(RC.vel.x,100),snap(RC.vel.y,100),snap(RC.vel.z,100),false)
+		sync_timer = 10
+		pings.GNRCcarSyncState(snap(RC.pos.x,1000),snap(RC.pos.y,1000),snap(RC.pos.z,1000),snap(RC.rot,1000),RC.e_a,
+		snap(RC.vel.x,1000),snap(RC.vel.y,1000),snap(RC.vel.z,1000),false,RC.et,RC.ctrl)
 	end
 end)
 
@@ -667,15 +667,17 @@ end
 ---@param vx number
 ---@param vy number
 ---@param vz number
----@param death boolean
-function pings.GNRCcarSyncState(x,y,z,r,t,vx,vy,vz,death)
-	if death then
+---@param d boolean
+function pings.GNRCcarSyncState(x,y,z,r,t,vx,vy,vz,d,et,ctrl)
+	if d then
 		API.ON_DEATH:invoke(RC.pos:copy(),vectors.vec3(x,y,z))
 	end
 	RC.pos = vectors.vec3(x,y,z)
 	RC.vel = vectors.vec3(vx,vy,vz)
 	RC.e_a = t
+	RC.et = et
 	RC.rot = r
+	RC.ctrl = ctrl
 end
 
 function pings.GNRCcarHonk()
