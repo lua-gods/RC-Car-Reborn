@@ -13,13 +13,13 @@ local Parts = {
 
 -->====================[ Input Map ]====================<--
 local Input = {
-	Start    = keybinds:newKeybind("Start RC Car","key.keyboard.grave.accent"),
-	Honk    = keybinds:newKeybind("Car Horn","key.keyboard.f"),
-	Jump    = keybinds:newKeybind("Jump","key.keyboard.space"),
-	Forward  = keybinds:newKeybind("Throttle Forward","key.keyboard.w"),
-	Backward = keybinds:newKeybind("Throttle Backward","key.keyboard.s"),
-	Left     = keybinds:newKeybind("Steer Left","key.keyboard.a"),
-	Right    = keybinds:newKeybind("Steer Right","key.keyboard.d"),
+	Start    = keybinds:fromVanilla("figura.config.action_wheel_button"),
+	Honk     = keybinds:fromVanilla("key.swapOffhand"),
+	Jump     = keybinds:fromVanilla("key.jump"),
+	Forward  = keybinds:fromVanilla("key.forward"),
+	Backward = keybinds:fromVanilla("key.back"),
+	Left     = keybinds:fromVanilla("key.left"),
+	Right    = keybinds:fromVanilla("key.right"),
 }
 
 local Physics = {
@@ -92,24 +92,24 @@ local RC = {
 	,dt--[[                      distance traveled ]] = 0 -- locked
 }
 -->========================================[ Camera ]=========================================<--
-local Camera = {
+local cam = {
 	height--[[               ]] = 7.2/16
 	,ldir--[[                ]] = vectors.vec2()
 	,dir--[[                 ]] = vectors.vec2()
 	,enabled--[[             ]] = false
-	,transition--[[          ]] = 0
-	,dist--[[                ]] = 3
+	,dist--[[    F5 Distance ]] = 3
 	,rot_offset--[[          ]] = 0
-
-	,transition_duration--[[ ]] = 1
+	
+	,t--[[              Time ]] = 0 -- locked
+	,t_d--[[   Time Duration ]] = 1
 
 	,lcam_dist--[[           ]] = 0
 	,cam_dist--[[            ]] = 0
-	,doppler--[[             ]] = 1
+	,d--[[           Doppler ]] = 1
 }
 -->==========[ Bake/Init ]==========<--
 Parts.root:setParentType("World")
-Camera.transition_duration = Camera.transition_duration / 10
+cam.t_d = cam.t_d / 10
 
 
 -->====================[ Input ]====================<--
@@ -117,7 +117,7 @@ local respawn_time_check = 0
 Input.Start.press = function ()
 	respawn_time_check = respawn_time_check + 5
 	RC.engine = not RC.engine
-	Camera.enabled = RC.engine
+	cam.enabled = RC.engine
 	if RC.engine then
 		local steer = 0
 		if Input.Left:isPressed() then
@@ -136,7 +136,7 @@ Input.Start.press = function ()
 		end
 		pings.GNRCcarCtrlThrottle(throttle)
 		if player:isLoaded() then
-			Camera.dir = RC.mat.c3.xz
+			cam.dir = RC.mat.c3.xz
 		end
 		host:setActionbar('[{"text":"Remote Controll Mode: "},{"text":"Enabled","color":"green"}]')
 	else
@@ -207,7 +207,7 @@ events.TICK:register(function ()
 	else
 		RC.e_a = math.max(RC.e_a - 0.02/RC.a_sfw,0)
 	end
-	RC.str = math.lerp(RC.str,RC.ctrl.x * -25,0.4) / math.clamp(math.abs(RC.et)+0.4,0.9,10)
+	RC.str = math.lerp(RC.str,RC.ctrl.x * -25,0.2) / math.clamp(math.abs(RC.et)+0.4,0.9,10)
 
 	if honk_cooldown > 0 then
 		honk_cooldown = honk_cooldown - 1
@@ -267,7 +267,7 @@ end
 ---@param height number
 ---@return table
 function API:setCameraHeight(height)
-	Camera.height = height/16
+	cam.height = height/16
 	return self
 end
 
@@ -360,7 +360,7 @@ end
 ---@return Vector2
 function API:getCameraDir(delta)
 	if not delta then delta = 0 end
-	return math.lerp(Camera.ldir,Camera.dir,delta)
+	return math.lerp(cam.ldir,cam.dir,delta)
 end
 
 ---Returns true if the car is on the ground
@@ -374,7 +374,7 @@ end
 --- Player Camera 0 <---> 1 RC Car Camera
 ---@return number
 function API:getCameraTransition()
-	return Camera.transition
+	return cam.t
 end
 
 ---Registers the given model as a wheel
@@ -475,10 +475,10 @@ local function collision(pos,vel,axis)
 end
 local engineSound = sounds:playSound("engine",RC.pos,1,0,true)
 events.TICK:register(function ()
-	Camera.lcam_dist = Camera.cam_dist
+	cam.lcam_dist = cam.cam_dist
 	local cdist = (RC.pos-client:getCameraPos()):length()
-	Camera.cam_dist = cdist
-	Camera.doppler = math.clamp(Camera.lcam_dist-Camera.cam_dist,-0.9,0.9) * 0.3 +1
+	cam.cam_dist = cdist
+	cam.d = math.clamp(cam.lcam_dist-cam.cam_dist,-0.9,0.9) * 0.3 +1
 	local e = math.abs(RC.et*1.3)
 	for i = 1, 10, 1 do
 		if e > 1 then
@@ -487,7 +487,7 @@ events.TICK:register(function ()
 			break
 		end
 	end
-	engineSound:setPos(RC.pos):setPitch((e*1+0.7) * Camera.doppler):setVolume(math.clamp(math.clamp(e*8,0.0,1),0,0.1))
+	engineSound:setPos(RC.pos):setPitch((e*1+0.7) * cam.d):setVolume(math.clamp(math.clamp(e*8,0.0,1),0,0.1))
 	RC.lpos = RC.pos:copy()
 	RC.lvel = RC.vel:copy()
 	RC.lrot = RC.rot
@@ -608,8 +608,8 @@ events.TICK:register(function ()
 	end
 
 	if not H then return end
-	Camera.ldir = Camera.dir:copy()
-	Camera.dir = (Camera.dir - (RC.pos - RC.lpos).xz / Camera.dist):normalized()
+	cam.ldir = cam.dir:copy()
+	cam.dir = (cam.dir - (RC.pos - RC.lpos).xz / cam.dist):normalized()
 end)
 
 -->====================[ Networking ]====================<--
@@ -722,22 +722,23 @@ events.POST_WORLD_RENDER:register(function (dt)
 		if not player:isLoaded() then return end
 		local crot = player:getRot()
 		crot.y = (crot.y) % 360 -- <=== El stupido
-		local trueCamDir = math.lerp(Camera.ldir,Camera.dir,dt)
-		trueCamDir = vectors.vec3(trueCamDir.x,0.5,trueCamDir.y):add(0,0.5,0)*Camera.dist
+		local trueCamDir = math.lerp(cam.ldir,cam.dir,dt)
+		trueCamDir = vectors.vec3(trueCamDir.x,0.5,trueCamDir.y):add(0,0.5,0)*cam.dist
 		if player:isLoaded() then
 			local hpos = player:getPos(dt):add(0,player:getEyeHeight(),0)
-			if Camera.enabled then
-				Camera.transition = math.min(Camera.transition + deltaFrame * Camera.transition_duration,1)
+			if cam.enabled then
+				cam.t = math.min(cam.t + deltaFrame * cam.t_d,1)
 			else
-				Camera.transition = math.max(Camera.transition - deltaFrame * Camera.transition_duration,0)
+				cam.t = math.max(cam.t - deltaFrame * cam.t_d,0)
 			end
-			if Camera.transition < 0.001 then
+			if cam.t < 0.001 then
 				renderer:setCameraPivot()
 				renderer:setCameraRot()
 			else
-				local transition = -(math.cos(math.pi * Camera.transition) - 1) / 2
-				if renderer:isFirstPerson() then
-					renderer:setCameraPivot(math.lerp(hpos,tpos:add(0,Camera.height+(true_sus.y)/16,0),transition))
+				local transition = -(math.cos(math.pi * cam.t) - 1) / 2 -- easing function
+				
+				if renderer:isFirstPerson() then -- FIrst Person Camera
+					renderer:setCameraPivot(math.lerp(hpos,tpos:add(0,cam.height+(true_sus.y)/16,0),transition))
 					local shake = vectors.vec2()
 					if RC.is_on_floor then
 						local intensity = math.min(RC.vel.xz:length(),2)
@@ -745,22 +746,25 @@ events.POST_WORLD_RENDER:register(function (dt)
 					end
 					renderer:setCameraRot(crot.x+shake.x,math.lerp(crot.y,(crot.y-true_rot)%360,transition),math.deg(true_sus.x)*.3+shake.y)
 					
-				else
-					renderer:setCameraPivot(math.lerp(hpos,tpos:add(0,Camera.height,0),transition))
+				else -- Third Person Camera
+					renderer:setCameraPivot(math.lerp(hpos,tpos:add(0,cam.height,0),transition))
+					local frot = math.deg(math.atan2(trueCamDir.z,trueCamDir.x)) + 90
 					if renderer:isCameraBackwards() then
-						renderer:setCameraRot(crot.x,math.lerp(crot.y, math.deg(math.atan2(trueCamDir.z,trueCamDir.x))+90+180,transition),0)
+						renderer:setCameraRot(crot.x,math.lerp(crot.y, frot + 180,transition),0)
 					else
-						renderer:setCameraRot(crot.x,math.lerp(crot.y, math.deg(math.atan2(trueCamDir.z,trueCamDir.x))+90,transition),0)
+						renderer:setCameraRot(crot.x,math.lerp(crot.y, frot,transition),0)
 					end
 				end
 			end
 		end
-	if Camera.transition < 0.01 then
+	if cam.t < 0.01 then
 		renderer:setFOV()
 	else
-	renderer:setFOV(math.lerp(1,math.lerp(1,RC.a_sf_fov_mul,RC.e_a),Camera.transition))
+	renderer:setFOV(math.lerp(1,math.lerp(1,RC.a_sf_fov_mul,RC.e_a),cam.t))
 	end
 end)
+
+
 
 local lprot = vectors.vec2()
 events.POST_RENDER:register(function (x,y)
@@ -769,7 +773,7 @@ events.POST_RENDER:register(function (x,y)
 	local d = lprot-prot
 	lprot = prot
 	if not renderer:isFirstPerson() and RC.engine then
-		Camera.dir = vectors.rotateAroundAxis(d.y,vectors.vec3(Camera.dir.x,0,Camera.dir.y),vectors.vec3(0,1,0)).xz
+		cam.dir = vectors.rotateAroundAxis(d.y,vectors.vec3(cam.dir.x,0,cam.dir.y),vectors.vec3(0,1,0)).xz
 	end
 end)
 
