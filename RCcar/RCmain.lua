@@ -5,7 +5,7 @@
 \____/_/ |_/ Source: https://github.com/lua-gods/RC-Car]]
 
 H = host:isHost()
-local katt = require("RCcar.KattEventsAPI")
+local eventLib = require("RCcar.eventLib")
 local Parts = {
 	root = models.RCcar.model.root,
 	base = models.RCcar.model.root.Base,
@@ -215,10 +215,10 @@ events.TICK:register(function ()
 end)
 
 -->====================[ API ]====================<--
-local API = {ON_JUMP = katt.newEvent(),
-ON_UNJUMP = katt.newEvent(),
-ON_DEATH = katt.newEvent(),
-ON_HORN = katt.newEvent(),}
+local API = {ON_JUMP = eventLib.newEvent(),
+ON_UNJUMP = eventLib.newEvent(),
+ON_DEATH = eventLib.newEvent(),
+ON_HORN = eventLib.newEvent(),}
 
 ---Returns the keybind inputs of the car
 ---@return table
@@ -285,8 +285,8 @@ end
 
 ---Returns the RC car control vector
 ---***
----X = Left to Right
----Y = Forward to Backward
+---`x` : Left to Right
+---`y` : Forward to Backward
 ---@return Vector2
 function API:getControlVector()
 	return RC.ctrl
@@ -294,9 +294,9 @@ end
 
 ---Returns a Vector3 containing the data about the engine acceleration
 --***
----X = minimum speed in meters/ticks
----X = maximum speed in meters/ticks
----X = the percentage on where in between it is, the range is 0 - 1, slowest - fastest
+---`x` : minimum speed in meters/ticks  
+---`y` : maximum speed in meters/ticks  
+---`z` : the percentage on where in between it is, the range is 0 - 1, slowest - fastest  
 ---@return Vector3
 function API:getEngineThrottleData()
 	return vectors.vec3(RC.a_s,RC.a_sf,RC.e_a)
@@ -304,9 +304,9 @@ end
 
 ---Returns the local Velocity of the RC car.
 ---***
----X for Left-Right  
----Y for UP-Down  
----Z for Backward-Forward  
+---`x` : Left-Right  
+---`y` : UP-Down  
+---`z` : Backward-Forward  
 ---@param delta number?
 ---@return Vector3
 function API:getLocalVel(delta)
