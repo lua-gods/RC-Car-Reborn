@@ -1,8 +1,8 @@
 
 ------BETA TESTERS------
-  Auria / Dragekk
-  Circlemaniac
+  Auria
+  Deni
   Subcon
   SquidEevee
 ------BUILT IN MODS------
-  Circlemaniac : Head / Rear Lights
+  Deni : Head / Rear Lights

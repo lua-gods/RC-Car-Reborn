@@ -1,8 +1,8 @@
---[[______   __                _                 __
-  / ____/ | / /___ _____ ___  (_)___ ___  ____ _/ /____  _____
- / / __/  |/ / __ `/ __ `__ \/ / __ `__ \/ __ `/ __/ _ \/ ___/
-/ /_/ / /|  / /_/ / / / / / / / / / / / / /_/ / /_/  __(__  )
-\____/_/ |_/\__,_/_/ /_/ /_/_/_/ /_/ /_/\__,_/\__/\___/____]]
+--[[______   __
+  / ____/ | / / By: GNamimates | https://gnon.top | Discord: @gn8.
+ / / __/  |/ / a remote control car for Figura
+/ /_/ / /|  / idk what else to say
+\____/_/ |_/ Source: https://github.com/lua-gods/RC-Car]]
 
 H = host:isHost()
 local katt = require("RCcar.KattEventsAPI")
