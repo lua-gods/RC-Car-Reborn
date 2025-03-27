@@ -77,6 +77,8 @@ local RC = {
 	,ng--[[                         normal gravity ]] = -0.07
 	,jg--[[                           jump gravity ]] = -0.03
 	,size--[[                             Car Size ]] = vec(0.5,0.5,0.5)
+	,dpos--[[                           Desync Pos ]] = vec(0,0,0)  -- locked
+	,sync_time--[[                       Sync Time ]] = 0  -- locked
 	,wheels = {} --(automatic)
 	-->========================================[ Statistics ]=========================================<--
 	,is_underwater--[[                             ]] = false  -- locked
@@ -473,6 +475,9 @@ local function collision(pos,vel,axis)
 		end
 	end
 end
+
+
+
 local engineSound = sounds:playSound("engine",RC.pos,1,0,true)
 events.TICK:register(function ()
 	cam.lcam_dist = cam.cam_dist
@@ -487,8 +492,9 @@ events.TICK:register(function ()
 			break
 		end
 	end
+	RC.sync_time = RC.sync_time + 1
 	engineSound:setPos(RC.pos):setPitch((e*1+0.7) * cam.d):setVolume(math.clamp(math.clamp(e*8,0.0,1),0,0.1))
-	RC.lpos = RC.pos:copy()
+	RC.lpos = RC.pos - RC.dpos
 	RC.lvel = RC.vel:copy()
 	RC.lrot = RC.rot
 	RC.ltr = RC.tr
@@ -624,7 +630,7 @@ events.TICK:register(function ()
 	if not H then return end
 	sync_timer = sync_timer - 1
 	if sync_timer < 0 then
-		sync_timer = 10
+		sync_timer = 20
 		pings.GNRCcarSyncState(snap(RC.pos.x,1000),snap(RC.pos.y,1000),snap(RC.pos.z,1000),snap(RC.rot,1000),RC.e_a,
 		snap(RC.vel.x,1000),snap(RC.vel.y,1000),snap(RC.vel.z,1000),false,RC.et,RC.ctrl)
 	end
@@ -672,7 +678,10 @@ function pings.GNRCcarSyncState(x,y,z,r,t,vx,vy,vz,d,et,ctrl)
 	if d then
 		API.ON_DEATH:invoke(RC.pos:copy(),vectors.vec3(x,y,z))
 	end
-	RC.pos = vectors.vec3(x,y,z)
+	local newPos = vectors.vec3(x,y,z)
+	RC.sync_time = 20
+	RC.dpos = newPos - RC.pos
+	RC.pos = newPos
 	RC.vel = vectors.vec3(vx,vy,vz)
 	RC.e_a = t
 	RC.et = et
@@ -696,8 +705,12 @@ events.WORLD_RENDER:register(function (delta)
 	lsys_time = sys_time
 end)
 
+
 events.POST_WORLD_RENDER:register(function (dt)
-	local tpos = math.lerp(RC.lpos,RC.pos,dt)
+	if RC.dpos:length() > 0.01 then
+		RC.dpos = RC.dpos *(1 - deltaFrame / 11 / RC.dpos:length())
+	end
+	local tpos = math.lerp(RC.lpos,RC.pos - RC.dpos,dt)
 	local true_vel = math.lerp(RC.lvel,RC.vel,dt)
 	local true_dist_trav = math.lerp(RC.ldt,RC.dt,dt)
 	local throttle_trav = -math.lerp(RC.ltr,RC.tr,dt)
